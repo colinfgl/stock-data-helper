@@ -1,0 +1,4 @@
+﻿code,name,rows,event_count,adjusted_ohlc_bad_rows,factor_bad_rows,event_qa_failures,first_date,last_date,adjusted_pass
+3665,貿聯-KY,2092,9,0,0,0,20180102,20260817,True
+4916,事欣科,2094,9,0,0,0,20180102,20260817,True
+6770,力積電,1135,3,0,0,0,20211206,20260817,True

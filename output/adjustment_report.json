@@ -1,0 +1,44 @@
+{
+  "generated_at_utc": "2026-08-28T09:58:37+00:00",
+  "method": "Backward adjusted OHLC; multiply each raw date by product of event factors with event_date > row_date. Event date excludes its own factor.",
+  "event_count": 21,
+  "summary": [
+    {
+      "code": "3665",
+      "name": "貿聯-KY",
+      "rows": 2092,
+      "event_count": 9,
+      "adjusted_ohlc_bad_rows": 0,
+      "factor_bad_rows": 0,
+      "event_qa_failures": 0,
+      "first_date": "20180102",
+      "last_date": "20260817",
+      "adjusted_pass": true
+    },
+    {
+      "code": "4916",
+      "name": "事欣科",
+      "rows": 2094,
+      "event_count": 9,
+      "adjusted_ohlc_bad_rows": 0,
+      "factor_bad_rows": 0,
+      "event_qa_failures": 0,
+      "first_date": "20180102",
+      "last_date": "20260817",
+      "adjusted_pass": true
+    },
+    {
+      "code": "6770",
+      "name": "力積電",
+      "rows": 1135,
+      "event_count": 3,
+      "adjusted_ohlc_bad_rows": 0,
+      "factor_bad_rows": 0,
+      "event_qa_failures": 0,
+      "first_date": "20211206",
+      "last_date": "20260817",
+      "adjusted_pass": true
+    }
+  ],
+  "all_pass": true
+}
