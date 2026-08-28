@@ -1,0 +1,21 @@
+code,name,raw_rows,start_date,end_date,raw_duplicate_issues,raw_ohlc_null_issues,raw_qa_source,corporate_action_scope,adjusted_qa_status,formal_gate_status
+0050,元大台灣50,2092,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+00400A,主動國泰動能高息,90,20260409,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+009820,元大納斯達克精選,80,20260423,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2207,和泰車,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2308,台達電,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2317,鴻海,2091,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2330,台積電,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2368,金像電,2090,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2376,技嘉,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2382,廣達,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2383,台光電,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2454,聯發科,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2634,漢翔,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2834,臺企銀,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+2885,元大金,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+3293,鈊象,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+3491,昇達科,2097,20180102,20260817,0,0,Official Checkpoint 2of5,Existing checkpoint scope,Not re-opened,PASS
+3665,貿聯-KY,2092,20180102,20260817,0,0,Last3 build + TWSE official cross-check,9 events,21-event QA subset PASS,PASS
+4916,事欣科,2094,20180102,20260817,0,0,Last3 build + TWSE official cross-check,9 events,21-event QA subset PASS,PASS
+6770,力積電,1135,20211206,20260817,0,0,Last3 build + TWSE official cross-check,3 events,21-event QA subset PASS,PASS
