@@ -1,0 +1,30 @@
+name: Export R45 merge inputs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/export_merge_inputs.yml
+  workflow_dispatch:
+
+jobs:
+  export-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Stage merge inputs
+        shell: bash
+        run: |
+          mkdir -p merge_inputs
+          cp output/3665.csv output/4916.csv output/6770.csv merge_inputs/
+          cp output/3665_adjusted.csv output/4916_adjusted.csv output/6770_adjusted.csv merge_inputs/
+          cp output/adjustment_event_qa.csv output/adjustment_summary.csv output/adjustment_report.json merge_inputs/
+          cp output/qa_summary.csv output/qa_report.json output/source_manifest.csv merge_inputs/
+          cp output/formal20_gate.csv output/formal20_gate_report.json merge_inputs/
+      - name: Upload merge inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: r45-merge-inputs-20260828
+          path: merge_inputs/
+          retention-days: 30
