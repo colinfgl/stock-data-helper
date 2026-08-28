@@ -16,6 +16,12 @@ m.EXPECTED_TOTAL_SOURCE = 36939
 m.EXPECTED_TOTAL_NO_TRADE = 6
 m.EXPECTED_TOTAL_PRICE = 36933
 
+# Full official corporate-action count for the last three symbols.
+# 3665 has 10 events, including the 2023-04-20 cash-capital-increase ex-right event.
+m.EXPECTED_LAST3_EVENTS['3665'] = 10
+m.EXPECTED_LAST3_EVENTS['4916'] = 9
+m.EXPECTED_LAST3_EVENTS['6770'] = 3
+
 # TWSE rate-limits long sequences of monthly TWT49U requests. Use quarterly
 # windows instead (35 requests through 2026-08-17), preserving the same
 # official endpoint and event-factor methodology.
