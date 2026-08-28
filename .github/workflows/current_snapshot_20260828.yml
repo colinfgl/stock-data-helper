@@ -1,0 +1,30 @@
+name: Current Snapshot 20260828
+on:
+  push:
+    paths:
+      - 'scripts/build_current_snapshot_20260828.py'
+      - '.github/workflows/current_snapshot_20260828.yml'
+  workflow_dispatch:
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Collect current snapshot
+        run: python scripts/build_current_snapshot_20260828.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: current-snapshot-20260828
+          path: output_current_snapshot_20260828/
+          retention-days: 90
+      - name: Enforce gate
+        run: test -f output_current_snapshot_20260828/report.json && python - <<'PY'
+          import json
+          r=json.load(open('output_current_snapshot_20260828/report.json'))
+          assert r['all_pass'], r
+          PY
