@@ -1,0 +1,40 @@
+name: P1B Macro history
+
+on:
+  push:
+    paths:
+      - 'scripts/build_p1b_macro.py'
+      - '.github/workflows/p1b_macro.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Collect macro history
+        shell: bash
+        run: |
+          set +e
+          python scripts/build_p1b_macro.py
+          code=$?
+          mkdir -p output_p1b_macro
+          echo "$code" > output_p1b_macro/exit_code.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p1b-macro-20260828
+          path: output_p1b_macro/
+          if-no-files-found: error
+      - name: Enforce gate
+        shell: bash
+        run: |
+          code=$(cat output_p1b_macro/exit_code.txt)
+          test "$code" = "0"
