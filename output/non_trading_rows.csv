@@ -1,0 +1,3 @@
+﻿date,code,name,volume,open,high,low,close,source_asset,reason
+20211001,3665,貿聯-KY,0,,,,,yearly_2021.zip,volume_zero_and_ohlc_empty
+20260610,3665,貿聯-KY,0,,,,,weekly_2026_W24.zip,volume_zero_and_ohlc_empty

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-08-28T09:50:30Z",
+  "generated_at_utc": "2026-08-28T09:53:15+00:00",
   "source_repo": "yukishirotsubasa/tw-stock-data-release",
   "source_tag": "daily-close-csv",
   "cutoff": "20260817",
@@ -21,51 +21,54 @@
     {
       "code": "3665",
       "name": "貿聯-KY",
-      "rows": 2094,
-      "unique_dates": 2094,
-      "first_date": "20180102",
-      "last_date": "20260817",
+      "source_rows": 2094,
+      "price_rows": 2092,
+      "first_price_date": "20180102",
+      "last_price_date": "20260817",
       "duplicate_rows": 0,
-      "null_or_non_numeric_rows": 2,
+      "no_trade_placeholder_rows": 2,
+      "null_or_non_numeric_price_rows": 0,
       "ohlc_logic_bad_rows": 0,
       "date_boundary_bad_rows": 0,
       "max_calendar_gap_days": 13,
       "continuity_reasonable": true,
-      "dedup_output_rows": 2094,
+      "dedup_output_price_rows": 2092,
       "duplicate_value_conflicts": 0,
-      "raw_pass": false
+      "raw_pass": true
     },
     {
       "code": "4916",
       "name": "事欣科",
-      "rows": 2094,
-      "unique_dates": 2094,
-      "first_date": "20180102",
-      "last_date": "20260817",
+      "source_rows": 2094,
+      "price_rows": 2094,
+      "first_price_date": "20180102",
+      "last_price_date": "20260817",
       "duplicate_rows": 0,
-      "null_or_non_numeric_rows": 0,
+      "no_trade_placeholder_rows": 0,
+      "null_or_non_numeric_price_rows": 0,
       "ohlc_logic_bad_rows": 0,
       "date_boundary_bad_rows": 0,
       "max_calendar_gap_days": 13,
       "continuity_reasonable": true,
-      "dedup_output_rows": 2094,
+      "dedup_output_price_rows": 2094,
       "duplicate_value_conflicts": 0,
       "raw_pass": true
     },
     {
       "code": "6770",
       "name": "力積電",
-      "rows": 1135,
-      "unique_dates": 1135,
-      "first_date": "20211206",
-      "last_date": "20260817",
+      "source_rows": 1135,
+      "price_rows": 1135,
+      "first_price_date": "20211206",
+      "last_price_date": "20260817",
       "duplicate_rows": 0,
-      "null_or_non_numeric_rows": 0,
+      "no_trade_placeholder_rows": 0,
+      "null_or_non_numeric_price_rows": 0,
       "ohlc_logic_bad_rows": 0,
       "date_boundary_bad_rows": 0,
       "max_calendar_gap_days": 13,
       "continuity_reasonable": true,
-      "dedup_output_rows": 1135,
+      "dedup_output_price_rows": 1135,
       "duplicate_value_conflicts": 0,
       "raw_pass": true
     }
@@ -77,27 +80,65 @@
         {
           "month": "201801",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20180101&stockNo=3665&response=json",
-          "official_rows": 22,
-          "compared_rows": 22,
-          "mismatch_rows": 0
+          "official_price_rows": 22,
+          "compared_price_rows": 22,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
+        },
+        {
+          "month": "202110",
+          "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20211001&stockNo=3665&response=json",
+          "official_price_rows": 19,
+          "compared_price_rows": 19,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [
+            "20211001"
+          ],
+          "official_no_trade_dates": [
+            "20211001"
+          ],
+          "no_trade_match": true
         },
         {
           "month": "202307",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20230701&stockNo=3665&response=json",
-          "official_rows": 21,
-          "compared_rows": 21,
-          "mismatch_rows": 0
+          "official_price_rows": 21,
+          "compared_price_rows": 21,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
+        },
+        {
+          "month": "202606",
+          "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260601&stockNo=3665&response=json",
+          "official_price_rows": 20,
+          "compared_price_rows": 20,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [
+            "20260610"
+          ],
+          "official_no_trade_dates": [
+            "20260610"
+          ],
+          "no_trade_match": true
         },
         {
           "month": "202608",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=3665&response=json",
-          "official_rows": 11,
-          "compared_rows": 11,
-          "mismatch_rows": 0
+          "official_price_rows": 11,
+          "compared_price_rows": 11,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         }
       ],
-      "total_compared_rows": 54,
-      "mismatch_rows": 0,
+      "total_compared_price_rows": 93,
+      "mismatch_price_rows": 0,
+      "no_trade_mismatch_months": 0,
       "fetch_errors": [],
       "pass": true
     },
@@ -107,27 +148,37 @@
         {
           "month": "201801",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20180101&stockNo=4916&response=json",
-          "official_rows": 22,
-          "compared_rows": 22,
-          "mismatch_rows": 0
+          "official_price_rows": 22,
+          "compared_price_rows": 22,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         },
         {
           "month": "202407",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20240701&stockNo=4916&response=json",
-          "official_rows": 21,
-          "compared_rows": 21,
-          "mismatch_rows": 0
+          "official_price_rows": 21,
+          "compared_price_rows": 21,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         },
         {
           "month": "202608",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=4916&response=json",
-          "official_rows": 11,
-          "compared_rows": 11,
-          "mismatch_rows": 0
+          "official_price_rows": 11,
+          "compared_price_rows": 11,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         }
       ],
-      "total_compared_rows": 54,
-      "mismatch_rows": 0,
+      "total_compared_price_rows": 54,
+      "mismatch_price_rows": 0,
+      "no_trade_mismatch_months": 0,
       "fetch_errors": [],
       "pass": true
     },
@@ -137,30 +188,66 @@
         {
           "month": "202112",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20211201&stockNo=6770&response=json",
-          "official_rows": 19,
-          "compared_rows": 19,
-          "mismatch_rows": 0
+          "official_price_rows": 19,
+          "compared_price_rows": 19,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         },
         {
           "month": "202303",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20230301&stockNo=6770&response=json",
-          "official_rows": 23,
-          "compared_rows": 23,
-          "mismatch_rows": 0
+          "official_price_rows": 23,
+          "compared_price_rows": 23,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         },
         {
           "month": "202608",
           "official_url": "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=20260801&stockNo=6770&response=json",
-          "official_rows": 11,
-          "compared_rows": 11,
-          "mismatch_rows": 0
+          "official_price_rows": 11,
+          "compared_price_rows": 11,
+          "mismatch_price_rows": 0,
+          "source_no_trade_dates": [],
+          "official_no_trade_dates": [],
+          "no_trade_match": true
         }
       ],
-      "total_compared_rows": 53,
-      "mismatch_rows": 0,
+      "total_compared_price_rows": 53,
+      "mismatch_price_rows": 0,
+      "no_trade_mismatch_months": 0,
       "fetch_errors": [],
       "pass": true
     }
   ],
-  "all_pass": false
+  "non_trading_rows": [
+    {
+      "date": "20211001",
+      "code": "3665",
+      "name": "貿聯-KY",
+      "volume": "0",
+      "open": "",
+      "high": "",
+      "low": "",
+      "close": "",
+      "source_asset": "yearly_2021.zip",
+      "reason": "volume_zero_and_ohlc_empty"
+    },
+    {
+      "date": "20260610",
+      "code": "3665",
+      "name": "貿聯-KY",
+      "volume": "0",
+      "open": "",
+      "high": "",
+      "low": "",
+      "close": "",
+      "source_asset": "weekly_2026_W24.zip",
+      "reason": "volume_zero_and_ohlc_empty"
+    }
+  ],
+  "all_pass": true
 }
