@@ -1,5 +1,6 @@
 import calendar
 import re
+import time
 from decimal import Decimal
 
 import build_all20_adjusted_v2 as m
@@ -21,6 +22,40 @@ m.EXPECTED_TOTAL_PRICE = 36933
 m.EXPECTED_LAST3_EVENTS['3665'] = 10
 m.EXPECTED_LAST3_EVENTS['4916'] = 9
 m.EXPECTED_LAST3_EVENTS['6770'] = 3
+
+# Retry JSON parsing too. TWSE can occasionally return an empty/HTML response with
+# HTTP 200; the base request retry only handles request/HTTP failures.
+def robust_twse_month_rows(code, yyyymm):
+    url = f'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date={yyyymm}01&stockNo={code}&response=json'
+    last = None
+    for attempt in range(6):
+        try:
+            resp = m.get(url, 30)
+            data = resp.json()
+            out = {}
+            for row in data.get('data', []):
+                d = m.norm_date(row[0])
+                if not d:
+                    continue
+                out[d] = {
+                    'date': d,
+                    'code': code,
+                    'name': m.TARGETS[code][0],
+                    'market': 'TWSE',
+                    'volume': str(row[1]).replace(',', '').strip(),
+                    'open': str(row[3]).replace(',', '').strip(),
+                    'high': str(row[4]).replace(',', '').strip(),
+                    'low': str(row[5]).replace(',', '').strip(),
+                    'close': str(row[6]).replace(',', '').strip(),
+                    'source_asset': f'TWSE_STOCK_DAY_{yyyymm}',
+                }
+            return out, url
+        except Exception as exc:
+            last = exc
+            time.sleep(1.5 * (attempt + 1))
+    raise last
+
+m.twse_month_rows = robust_twse_month_rows
 
 # TWSE rate-limits long sequences of monthly TWT49U requests. Use quarterly
 # windows instead (35 requests through 2026-08-17), preserving the same
