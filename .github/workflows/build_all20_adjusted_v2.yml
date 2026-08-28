@@ -1,0 +1,43 @@
+name: Build all 20 adjusted OHLC v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/build_all20_adjusted_v2.py
+      - .github/workflows/build_all20_adjusted_v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-all20-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Build and validate
+        shell: bash
+        run: |
+          set +e
+          python scripts/build_all20_adjusted_v2.py
+          status=$?
+          echo "$status" > output_all20_v2/exit_code.txt
+          exit 0
+      - name: Upload validation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all20-adjusted-v2-20260828
+          path: output_all20_v2/
+          if-no-files-found: error
+      - name: Enforce final gate
+        shell: bash
+        run: |
+          code=$(cat output_all20_v2/exit_code.txt)
+          test "$code" = "0"
