@@ -1,0 +1,4 @@
+﻿code,name,rows,unique_dates,first_date,last_date,duplicate_rows,null_or_non_numeric_rows,ohlc_logic_bad_rows,date_boundary_bad_rows,max_calendar_gap_days,continuity_reasonable,dedup_output_rows,duplicate_value_conflicts,raw_pass
+3665,貿聯-KY,2094,2094,20180102,20260817,0,2,0,0,13,True,2094,0,False
+4916,事欣科,2094,2094,20180102,20260817,0,0,0,0,13,True,2094,0,True
+6770,力積電,1135,1135,20211206,20260817,0,0,0,0,13,True,1135,0,True
