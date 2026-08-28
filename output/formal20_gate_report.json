@@ -1,0 +1,21 @@
+{
+  "date": "2026-08-28",
+  "cutoff": "2026-08-17",
+  "core_codes": 20,
+  "official_checkpoint_codes": 17,
+  "official_checkpoint_rows": 31607,
+  "new_last3_rows": 5321,
+  "formal_total_price_rows": 36928,
+  "duplicate_issues": 0,
+  "ohlc_null_issues": 0,
+  "last3_adjustment_events": 21,
+  "last3_adjustment_event_failures": 0,
+  "last3_adjusted_ohlc_bad_rows": 0,
+  "formal_gate": "PASS",
+  "governance": {
+    "first17": "Use the already-official TWSE/TPEx Checkpoint 2of5; do not replace it with a later third-party repackaging.",
+    "last3": "Use the GitHub-built raw series with SHA verification and TWSE official sample cross-check, then apply the 21 frozen corporate-action factors.",
+    "independent_rebuild_note": "A separate all-20 rebuild from the public release package showed row-count differences for some of the first 17 symbols because that package handles no-trade/special rows differently. It is retained as a diagnostic only and is not allowed to override the official checkpoint."
+  },
+  "next_gate": "Merge append-only deltas into writable R32 binary, then seal formal R45."
+}
