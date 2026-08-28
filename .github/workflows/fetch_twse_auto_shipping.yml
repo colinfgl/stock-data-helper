@@ -1,0 +1,33 @@
+name: Fetch TWSE auto shipping history
+on:
+  push:
+    paths:
+      - 'scripts/fetch_twse_auto_shipping.py'
+      - '.github/workflows/fetch_twse_auto_shipping.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Collect history
+        shell: bash
+        run: |
+          set +e
+          python scripts/fetch_twse_auto_shipping.py
+          code=$?
+          echo "$code" > output_industry_extra/exit_code.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p1b-industry-auto-shipping-20260828
+          path: output_industry_extra/
+          if-no-files-found: error
+      - name: Enforce gate
+        run: test "$(cat output_industry_extra/exit_code.txt)" = "0"
