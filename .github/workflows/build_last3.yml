@@ -6,6 +6,8 @@ on:
     paths:
       - scripts/build_last3.py
       - .github/workflows/build_last3.yml
+  issues:
+    types: [opened]
   workflow_dispatch:
 
 permissions:
@@ -13,6 +15,7 @@ permissions:
 
 jobs:
   build-last3:
+    if: ${{ github.event_name != 'issues' || github.event.issue.title == 'run-last3' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
