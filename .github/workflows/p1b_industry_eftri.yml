@@ -1,0 +1,40 @@
+name: P1B Industry EFTRI Official Monthly
+
+on:
+  push:
+    paths:
+      - 'scripts/build_p1b_industry_eftri.py'
+      - '.github/workflows/p1b_industry_eftri.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Collect EFTRI monthly history
+        shell: bash
+        run: |
+          set +e
+          python scripts/build_p1b_industry_eftri.py
+          code=$?
+          mkdir -p output_p1b_industry_eftri
+          echo "$code" > output_p1b_industry_eftri/exit_code.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p1b-industry-eftri-20260828
+          path: output_p1b_industry_eftri/
+          if-no-files-found: error
+      - name: Enforce gate
+        shell: bash
+        run: |
+          code=$(cat output_p1b_industry_eftri/exit_code.txt)
+          test "$code" = "0"
