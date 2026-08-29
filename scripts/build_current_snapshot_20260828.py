@@ -15,10 +15,9 @@ QUERIES=[
  ('TaiwanStockMarginPurchaseShortSale','2026-06-01','2026-08-28'),
  ('TaiwanStockPER','2026-06-01','2026-08-28'),
 ]
-# TaiwanStockPriceAdj currently returns HTTP 400 for the whole core20 snapshot.
-# R54/R55 do not depend on it: adjusted history is carried forward from the
-# verified R45 dataset and new corporate actions are applied separately.
-# Therefore this source is retained for diagnostics but is NOT a required gate.
+# Diagnostic-only endpoint. R54/R55 do not depend on it: adjusted history is
+# carried forward from verified R45 data and corporate actions are applied
+# separately. Optional-source failure must never fail the required snapshot.
 OPTIONAL_DATASETS={'TaiwanStockPriceAdj'}
 MACRO=[
  ('TaiwanExchangeRate','USD','2025-08-01','2026-08-28'),
@@ -28,7 +27,7 @@ MACRO=[
  ('USStockPrice','^SOX','2025-08-01','2026-08-28'),
  ('USStockPrice','^VIX','2025-08-01','2026-08-28'),
 ]
-S=requests.Session(); S.headers.update({'User-Agent':'Mozilla/5.0 stock-data-helper-current-snapshot/1.1'})
+S=requests.Session(); S.headers.update({'User-Agent':'Mozilla/5.0 stock-data-helper-current-snapshot/1.2'})
 
 def get(params):
     last=None
@@ -57,11 +56,17 @@ def main():
     for ds,start,end in QUERIES:
         allrows=[]
         is_optional=ds in OPTIONAL_DATASETS
+        optional_unavailable=False
         for code in TARGETS:
+            if is_optional and optional_unavailable:
+                coverage.append({'dataset':ds,'data_id':code,'required':False,'rows':0,'first_date':'','last_date':'','error':'SKIPPED_AFTER_OPTIONAL_SOURCE_UNAVAILABLE'})
+                continue
             rows,url,err=get({'dataset':ds,'data_id':code,'start_date':start,'end_date':end})
             if err:
                 rec={'dataset':ds,'data_id':code,'severity':'optional' if is_optional else 'required','error':err}
                 (optional_errors if is_optional else required_errors).append(rec)
+                if is_optional:
+                    optional_unavailable=True
             for x in rows:
                 y=dict(x); y['_query_id']=code; y['_source_url']=url; allrows.append(y)
             dates=[str(x.get('date','')) for x in rows if x.get('date')]
@@ -82,7 +87,6 @@ def main():
         coverage.append({'dataset':ds,'data_id':did,'required':True,'rows':len(rows),'first_date':min(dates) if dates else '','last_date':max(dates) if dates else '','error':err or ''})
         print(ds,did,len(rows),max(dates) if dates else '',err or 'OK',flush=True)
 
-    # Official TWSE 2026-08-28 industry index snapshot.
     u='https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=20260828&type=ALLBUT0999'
     try:
         rr=S.get(u,timeout=60); rr.raise_for_status(); j=rr.json(); rows=[]
