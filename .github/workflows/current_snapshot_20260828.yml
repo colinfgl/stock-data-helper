@@ -23,8 +23,4 @@ jobs:
           path: output_current_snapshot_20260828/
           retention-days: 90
       - name: Enforce gate
-        run: test -f output_current_snapshot_20260828/report.json && python - <<'PY'
-          import json
-          r=json.load(open('output_current_snapshot_20260828/report.json'))
-          assert r['all_pass'], r
-          PY
+        run: test -f output_current_snapshot_20260828/report.json && python -c "import json; r=json.load(open('output_current_snapshot_20260828/report.json')); assert r['all_pass'], r"
