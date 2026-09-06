@@ -1,0 +1,92 @@
+name: twse-official-breadth-taiex
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build_twse_official_breadth_taiex.py'
+      - '.github/workflows/twse_official_breadth_taiex.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        year: [2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect official TWSE breadth and TAIEX
+        run: python scripts/build_twse_official_breadth_taiex.py --year ${{ matrix.year }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twse-official-${{ matrix.year }}
+          path: output/twse_official_breadth_taiex/*_${{ matrix.year }}.*
+          retention-days: 30
+
+  merge:
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: twse-official-*
+          path: /tmp/twse
+          merge-multiple: true
+      - name: Merge outputs
+        run: |
+          mkdir -p output/twse_official_breadth_taiex
+          cp /tmp/twse/* output/twse_official_breadth_taiex/ || true
+          python - <<'PY'
+          import csv, glob, json
+          from pathlib import Path
+          root=Path('output/twse_official_breadth_taiex')
+          def merge(pattern,out):
+              files=sorted(root.glob(pattern))
+              rows=[]; fields=None
+              for p in files:
+                  with p.open(encoding='utf-8-sig',newline='') as f:
+                      r=csv.DictReader(f)
+                      fields=fields or r.fieldnames
+                      rows.extend(list(r))
+              rows.sort(key=lambda x:x['date'])
+              with (root/out).open('w',encoding='utf-8-sig',newline='') as f:
+                  w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
+              print(out,len(rows))
+          merge('twse_official_breadth_20*.csv','twse_official_breadth_2004_2026.csv')
+          merge('twse_official_taiex_20*.csv','twse_official_taiex_2004_2026.csv')
+          metas=[]
+          for p in sorted(root.glob('meta_20*.json')):
+              metas.append(json.loads(p.read_text(encoding='utf-8')))
+          manifest={
+              'status':'OFFICIAL_DATA_BACKFILL',
+              'years':metas,
+              'breadth_rows':sum(x['breadth_rows'] for x in metas),
+              'calendar_dates':sum(x['calendar_dates'] for x in metas),
+              'taiex_rows':sum(x['taiex_rows'] for x in metas),
+              'breadth_missing':sum(len(x['breadth_missing']) for x in metas),
+              'formal_weight':0,'p4':'NO INTERACTION'
+          }
+          (root/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(manifest,ensure_ascii=False))
+          PY
+      - name: Commit official backfill outputs
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add output/twse_official_breadth_taiex
+          git diff --cached --quiet || git commit -m 'Update official TWSE breadth and TAIEX backfill'
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twse-official-breadth-taiex-merged
+          path: output/twse_official_breadth_taiex/
+          retention-days: 30
