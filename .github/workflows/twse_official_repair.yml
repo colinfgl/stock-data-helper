@@ -1,0 +1,41 @@
+name: twse-official-repair
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/repair_twse_official_backfill.py'
+      - '.github/workflows/twse_official_repair.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repair:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        years: ['2004-2010','2011-2016','2017-2021','2022-2026']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download original official backfill artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: twse-official-*
+          path: /tmp/base
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: 34006829499
+      - name: Repair missing official observations slowly
+        run: python scripts/repair_twse_official_backfill.py --years '${{ matrix.years }}' --input-dir /tmp/base --output-dir output/twse_official_repair
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twse-official-repair-${{ matrix.years }}
+          path: output/twse_official_repair/
+          retention-days: 30
