@@ -1,0 +1,81 @@
+{
+  "model_id": "Historical-Analog-v0.2-preregistered-20260906",
+  "status": "FROZEN_BEFORE_TEST",
+  "created_at_asof": "2026-09-06T10:36:00+08:00",
+  "purpose": "Test whether official TAIEX + official TWSE-only breadth + macro/valuation regime adds stable OOS information beyond seasonality and momentum. Research/SHADOW only.",
+  "formal_weight": 0,
+  "p4_interaction": "NONE_LOCKED",
+  "anti_hindsight": {
+    "candidate_years": "strictly earlier years only",
+    "snapshot_frequency": "month_end",
+    "horizons_trading_days": [20, 60],
+    "top_k": 5,
+    "no_parameter_tuning_after_viewing_2026": true,
+    "no_rewrite_of_failed_results": true
+  },
+  "price_features": {
+    "source": "TWSE official TAIEX MI_5MINS_HIST",
+    "standardized_ytd_path_points": 20,
+    "trailing_returns_days": [20, 60],
+    "realized_vol_days": [20, 60],
+    "max_drawdown_ytd": true
+  },
+  "breadth_features": {
+    "source": "TWSE official MI_INDEX stock column from 漲跌證券數合計",
+    "advance_share_mean_days": [20, 60],
+    "advance_decline_ratio_mean_days": [20, 60],
+    "breadth_thrust_share_days": 20,
+    "breadth_thrust_threshold_advance_share": 0.65,
+    "limit_up_minus_limit_down_share_mean_days": 20
+  },
+  "macro_features": {
+    "required_asof_history": true,
+    "features": [
+      "US10Y_20d_change_bp",
+      "Brent_20d_return",
+      "SOX_20d_return",
+      "TSM_ADR_20d_return"
+    ],
+    "coverage_gate": "each feature >=80% of eligible snapshots; otherwise macro block excluded as a whole and result labeled v0.2-market-only"
+  },
+  "valuation_features": {
+    "required_asof_history": true,
+    "features": [
+      "TAIEX_forward_PE_percentile_asof",
+      "TAIEX_forward_EPS_revision_3m_asof"
+    ],
+    "coverage_gate": "both features >=80% of eligible snapshots; otherwise valuation block excluded as a whole and result labeled v0.2-market-only"
+  },
+  "distance": {
+    "method": "equal-weight block Euclidean after within-snapshot z-standardization",
+    "blocks": ["price_path", "price_scalars", "breadth", "macro_if_coverage_pass", "valuation_if_coverage_pass"],
+    "missing_block_rule": "do not impute from future data; entire optional block excluded if coverage gate fails"
+  },
+  "benchmarks": [
+    "same-calendar-date historical seasonality",
+    "trailing-horizon momentum",
+    "zero-return point forecast"
+  ],
+  "metrics": [
+    "direction_accuracy",
+    "MAE",
+    "Brier_score",
+    "bootstrap_direction_edge_vs_seasonality_95CI",
+    "bootstrap_direction_edge_vs_momentum_95CI"
+  ],
+  "promotion_gate": {
+    "minimum_valid_oos_snapshots_20d": 120,
+    "minimum_valid_oos_snapshots_60d": 90,
+    "direction_edge_requirement": "positive vs both seasonality and momentum",
+    "bootstrap_requirement": "95% CI lower bound > 0 for at least one horizon AND no material degradation on the other horizon",
+    "brier_requirement": "not worse than seasonality on promoted horizon",
+    "mae_requirement": "not materially worse than zero-return baseline",
+    "decision_if_fail": "formal_weight remains 0; preserve result; do not tune this frozen specification"
+  },
+  "notes": [
+    "v0.1 result was NOT PROVEN and is preserved unchanged.",
+    "2009 is not privileged; all eligible prior years compete equally.",
+    "No black-swan categorical hindsight labels are used as model features.",
+    "Company fundamentals and portfolio actions remain governed separately by 存股作戰地圖 fundamental/valuation/macro gates."
+  ]
+}
