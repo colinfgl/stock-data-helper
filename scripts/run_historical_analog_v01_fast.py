@@ -1,34 +1,53 @@
 #!/usr/bin/env python3
-"""Fast runner for historical analog v0.1.
+"""Fast Historical Analog v0.1 runner using 0050 as the price-path proxy.
 
-Fixes two source-format details without changing the frozen v0.1 research rules:
-1) release yearly/weekly CSV files contain MANY trading dates in one CSV, so rows
-   must be grouped by the `date` column before breadth is calculated;
-2) TWSE open-data TAIEX dates may use ROC/Gregorian localized strings, so date
-   parsing accepts numeric YYYY/MM/DD, YYY/MM/DD, and strings containing 年月日.
+Why 0050 here:
+- The public release archive supplies daily security closes in the same files used
+  to build breadth, including 0050, from 2004 onward.
+- This avoids hundreds of TWSE month-by-month index requests and keeps the entire
+  walk-forward sample date-aligned with breadth.
+- It is explicitly a 0050 proxy backtest, NOT a TAIEX backtest. The production
+  model and P4 remain untouched.
 
-Research remains SHADOW / 0 formal weight / P4 LOCKED.
+Breadth scope: TWSE+TPEX ordinary 4-digit common stocks.
+Price path proxy: 0050 close-to-close, unadjusted in the source archive.
+Research status: SHADOW / 0 formal weight / P4 LOCKED.
 """
 import csv
 import io
+import json
 import os
 import re
 import zipfile
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 os.environ.setdefault("ANALOG_OUT", "output/historical_analog_v01_fast")
 
 import build_historical_analog_v01 as base
 
-TAIEX_OPEN_DATA = "https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?response=open_data"
+PROXY_0050 = {}
 
 
 def normalize_date(value):
     s = str(value or "").strip().replace("\ufeff", "")
+    # Gregorian YYYYMMDD
     if re.fullmatch(r"\d{8}", s):
         y, m, d = int(s[:4]), int(s[4:6]), int(s[6:])
-        return f"{y:04d}-{m:02d}-{d:02d}"
+        try:
+            datetime(y, m, d)
+            return f"{y:04d}-{m:02d}-{d:02d}"
+        except ValueError:
+            return None
+    # ROC YYYMMDD (e.g. 1150904)
+    if re.fullmatch(r"\d{7}", s):
+        y, m, d = int(s[:3]) + 1911, int(s[3:5]), int(s[5:])
+        try:
+            datetime(y, m, d)
+            return f"{y:04d}-{m:02d}-{d:02d}"
+        except ValueError:
+            return None
     nums = [int(x) for x in re.findall(r"\d+", s)]
     if len(nums) >= 3:
         y, m, d = nums[0], nums[1], nums[2]
@@ -53,65 +72,42 @@ def grouped_daily_csv_from_zip(name, url):
                 groups = defaultdict(list)
                 for row in reader:
                     ds = normalize_date(row.get("date"))
-                    if ds:
-                        groups[ds].append(row)
+                    if not ds:
+                        continue
+                    groups[ds].append(row)
+                    if str(row.get("code", "")).strip() == "0050":
+                        cl = base.fnum(row.get("close"))
+                        if cl is not None and cl > 0:
+                            PROXY_0050[ds] = cl
             for ds in sorted(groups):
                 yield ds, groups[ds]
 
 
-def fast_fetch_taiex():
-    raw = base.get_bytes(TAIEX_OPEN_DATA, retries=4)
-    text = None
-    for enc in ("utf-8-sig", "big5", "cp950", "utf-8"):
-        try:
-            text = raw.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    if text is None:
-        raise RuntimeError("Unable to decode TWSE MI_5MINS_HIST open_data CSV")
-
-    rows = list(csv.reader(io.StringIO(text)))
-    if not rows:
-        raise RuntimeError("TWSE TAIEX open_data returned no rows")
-    header = [str(x).strip().replace("\ufeff", "") for x in rows[0]]
-    date_idx, close_idx = 0, None
-    for i, h in enumerate(header):
-        if "日期" in h or h.lower() == "date":
-            date_idx = i
-        if "收盤" in h or "closing" in h.lower() or h.lower() == "close":
-            close_idx = i
-    if close_idx is None:
-        close_idx = 4
-
-    out = {}
-    sample_dates = []
-    for row in rows[1:]:
-        if len(row) <= max(date_idx, close_idx):
-            continue
-        if len(sample_dates) < 5:
-            sample_dates.append(str(row[date_idx]))
-        ds = normalize_date(row[date_idx])
-        if not ds:
-            continue
-        try:
-            dt = datetime.strptime(ds, "%Y-%m-%d").date()
-        except ValueError:
-            continue
-        if dt > datetime(2026, 9, 4).date():
-            continue
-        cl = base.fnum(row[close_idx])
-        if cl is not None:
-            out[ds] = cl
+def fetch_0050_proxy():
+    # base.main calls build_breadth() first; grouped reader has populated PROXY_0050.
+    cutoff = "2026-09-04"
+    out = {d: v for d, v in PROXY_0050.items() if d <= cutoff}
     if len(out) < 3000:
         raise RuntimeError(
-            f"TAIEX open_data unexpectedly short: {len(out)} rows; "
-            f"header={header}; sample_dates={sample_dates}"
+            f"0050 proxy unexpectedly short: {len(out)} rows; "
+            f"range={min(out) if out else None}..{max(out) if out else None}"
         )
-    print(f"fast TAIEX rows={len(out)} {min(out)}..{max(out)}", flush=True)
+    print(f"0050 proxy rows={len(out)} {min(out)}..{max(out)}", flush=True)
     return out
 
 
 base.iter_daily_csv_from_zip = grouped_daily_csv_from_zip
-base.fetch_taiex = fast_fetch_taiex
+base.fetch_taiex = fetch_0050_proxy
 base.main()
+
+# Correct metadata inherited from the generic base builder so consumers do not
+# mistake this fast result for an official TAIEX-price analog.
+outdir = Path(os.environ["ANALOG_OUT"])
+manifest_path = outdir / "historical_analog_v01_manifest.json"
+if manifest_path.exists():
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["price_path_proxy"] = "0050 unadjusted close from public TWSE/TPEX-derived release archive"
+    manifest["price_path_is_taiex"] = False
+    manifest["proxy_rows"] = len(fetch_0050_proxy())
+    manifest["limitations"].insert(0, "Price-path proxy is 0050 unadjusted close, not TAIEX; this is a broad-market proxy experiment.")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
