@@ -1,0 +1,362 @@
+{
+  "generated_at": "2026-09-06T02:08:47.447315Z",
+  "status": "SHADOW_RESEARCH_ONLY",
+  "source_release": "https://github.com/yukishirotsubasa/tw-stock-data-release/releases/tag/daily-close-csv",
+  "source_release_name": "Daily Close CSV: weekly_2026_W36",
+  "breadth_scope": "TWSE+TPEX ordinary 4-digit common-stock codes; raw close returns; excludes ETFs/warrants; NOT official TWSE-only breadth",
+  "breadth_start": "2004-02-11",
+  "breadth_end": "2026-09-04",
+  "breadth_rows": 5556,
+  "taiex_rows": 5546,
+  "assets": [
+    [
+      "yearly_2004.zip",
+      228,
+      153031
+    ],
+    [
+      "yearly_2005.zip",
+      247,
+      169199
+    ],
+    [
+      "yearly_2006.zip",
+      247,
+      167980
+    ],
+    [
+      "yearly_2007.zip",
+      247,
+      294611
+    ],
+    [
+      "yearly_2008.zip",
+      249,
+      300966
+    ],
+    [
+      "yearly_2009.zip",
+      251,
+      311143
+    ],
+    [
+      "yearly_2010.zip",
+      251,
+      320469
+    ],
+    [
+      "yearly_2011.zip",
+      247,
+      327050
+    ],
+    [
+      "yearly_2012.zip",
+      250,
+      345378
+    ],
+    [
+      "yearly_2013.zip",
+      246,
+      350591
+    ],
+    [
+      "yearly_2014.zip",
+      248,
+      368100
+    ],
+    [
+      "yearly_2015.zip",
+      244,
+      370954
+    ],
+    [
+      "yearly_2016.zip",
+      244,
+      380452
+    ],
+    [
+      "yearly_2017.zip",
+      246,
+      393722
+    ],
+    [
+      "yearly_2018.zip",
+      247,
+      403179
+    ],
+    [
+      "yearly_2019.zip",
+      242,
+      402879
+    ],
+    [
+      "yearly_2020.zip",
+      245,
+      413017
+    ],
+    [
+      "yearly_2021.zip",
+      244,
+      417359
+    ],
+    [
+      "yearly_2022.zip",
+      246,
+      424877
+    ],
+    [
+      "yearly_2023.zip",
+      239,
+      420297
+    ],
+    [
+      "yearly_2024.zip",
+      242,
+      438802
+    ],
+    [
+      "yearly_2025.zip",
+      243,
+      452203
+    ],
+    [
+      "weekly_2026_W01.zip",
+      1,
+      1908
+    ],
+    [
+      "weekly_2026_W02.zip",
+      5,
+      9529
+    ],
+    [
+      "weekly_2026_W03.zip",
+      5,
+      9566
+    ],
+    [
+      "weekly_2026_W04.zip",
+      5,
+      9565
+    ],
+    [
+      "weekly_2026_W05.zip",
+      5,
+      9575
+    ],
+    [
+      "weekly_2026_W06.zip",
+      5,
+      9560
+    ],
+    [
+      "weekly_2026_W07.zip",
+      3,
+      5754
+    ],
+    [
+      "weekly_2026_W09.zip",
+      4,
+      7701
+    ],
+    [
+      "weekly_2026_W10.zip",
+      5,
+      9603
+    ],
+    [
+      "weekly_2026_W11.zip",
+      5,
+      9597
+    ],
+    [
+      "weekly_2026_W12.zip",
+      5,
+      9599
+    ],
+    [
+      "weekly_2026_W13.zip",
+      5,
+      9573
+    ],
+    [
+      "weekly_2026_W14.zip",
+      4,
+      7671
+    ],
+    [
+      "weekly_2026_W15.zip",
+      4,
+      7684
+    ],
+    [
+      "weekly_2026_W16.zip",
+      5,
+      9634
+    ],
+    [
+      "weekly_2026_W17.zip",
+      5,
+      9655
+    ],
+    [
+      "weekly_2026_W18.zip",
+      4,
+      7697
+    ],
+    [
+      "weekly_2026_W19.zip",
+      5,
+      9671
+    ],
+    [
+      "weekly_2026_W20.zip",
+      5,
+      9683
+    ],
+    [
+      "weekly_2026_W21.zip",
+      5,
+      9672
+    ],
+    [
+      "weekly_2026_W22.zip",
+      5,
+      8648
+    ],
+    [
+      "weekly_2026_W23.zip",
+      5,
+      9715
+    ],
+    [
+      "weekly_2026_W24.zip",
+      5,
+      9694
+    ],
+    [
+      "weekly_2026_W25.zip",
+      4,
+      7762
+    ],
+    [
+      "weekly_2026_W26.zip",
+      5,
+      9703
+    ],
+    [
+      "weekly_2026_W27.zip",
+      5,
+      9700
+    ],
+    [
+      "weekly_2026_W28.zip",
+      4,
+      7769
+    ],
+    [
+      "weekly_2026_W29.zip",
+      5,
+      9695
+    ],
+    [
+      "weekly_2026_W30.zip",
+      5,
+      9680
+    ],
+    [
+      "weekly_2026_W31.zip",
+      5,
+      9671
+    ],
+    [
+      "weekly_2026_W32.zip",
+      5,
+      9660
+    ],
+    [
+      "weekly_2026_W33.zip",
+      5,
+      9715
+    ],
+    [
+      "weekly_2026_W34.zip",
+      5,
+      9681
+    ],
+    [
+      "weekly_2026_W35.zip",
+      5,
+      9675
+    ],
+    [
+      "weekly_2026_W36.zip",
+      5,
+      9640
+    ]
+  ],
+  "analog_rules": {
+    "top_k": 5,
+    "path_points": 20,
+    "horizons": [
+      20,
+      60
+    ],
+    "candidate_years": "strictly earlier years only",
+    "snapshot": "month-end",
+    "formal_weight": 0,
+    "p4": "LOCKED/no interaction"
+  },
+  "wf_summary": [
+    {
+      "horizon": 20,
+      "n": 148,
+      "analog_direction_accuracy": 0.5067567567567568,
+      "seasonal_direction_accuracy": 0.5,
+      "momentum_direction_accuracy": 0.4594594594594595,
+      "analog_mae": 0.05181712424706591,
+      "seasonal_mae": 0.05212342143826305,
+      "zero_mae": 0.04820361764880728,
+      "analog_brier": 0.29517268907418565,
+      "seasonal_brier": 0.2736508586999263
+    },
+    {
+      "horizon": 60,
+      "n": 110,
+      "analog_direction_accuracy": 0.5272727272727272,
+      "seasonal_direction_accuracy": 0.4818181818181818,
+      "momentum_direction_accuracy": 0.5545454545454546,
+      "analog_mae": 0.10497930667734384,
+      "seasonal_mae": 0.10388960349744338,
+      "zero_mae": 0.09417127334846898,
+      "analog_brier": 0.31181094802892145,
+      "seasonal_brier": 0.26946039334950306
+    }
+  ],
+  "bootstrap_accuracy_edge_vs_seasonal": [
+    {
+      "horizon": 20,
+      "n": 148,
+      "edge_mean": 0.006756756756756757,
+      "ci_low": -0.08108108108108109,
+      "ci_high": 0.0945945945945946
+    },
+    {
+      "horizon": 60,
+      "n": 110,
+      "edge_mean": 0.045454545454545456,
+      "ci_low": -0.045454545454545456,
+      "ci_high": 0.13636363636363635
+    }
+  ],
+  "limitations": [
+    "Price-path proxy is 0050 unadjusted close, not TAIEX; this is a broad-market proxy experiment.",
+    "Breadth is combined TWSE+TPEX common stocks, not official TWSE-only counts.",
+    "Returns are raw close-to-close and are not corporate-action adjusted; ex-right/dividend days can affect individual returns.",
+    "Market universe changes over time; ratios/medians are preferred to raw counts for analog distance.",
+    "No model tuning was performed after viewing 2026; v0.1 uses fixed equal feature blocks and remains Shadow."
+  ],
+  "price_path_proxy": "0050 unadjusted close from public TWSE/TPEX-derived release archive",
+  "price_path_is_taiex": false,
+  "proxy_rows": 5546
+}
