@@ -1,0 +1,40 @@
+name: historical-analog-v02
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'output/twse_official_breadth_taiex/**'
+      - 'configs/historical_analog_v02_preregister.json'
+      - 'scripts/run_historical_analog_v02.py'
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify official merged inputs
+        run: |
+          test -s output/twse_official_breadth_taiex/twse_official_breadth_2004_2026.csv
+          test -s output/twse_official_breadth_taiex/twse_official_taiex_2004_2026.csv
+          test -s configs/historical_analog_v02_preregister.json
+      - name: Run frozen v0.2
+        run: python scripts/run_historical_analog_v02.py
+      - name: Commit v0.2 research outputs
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add output/historical_analog_v02
+          git diff --cached --quiet || git commit -m 'Update frozen Historical Analog v0.2 outputs'
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: historical-analog-v02
+          path: output/historical_analog_v02/
+          retention-days: 30
