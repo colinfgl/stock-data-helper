@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: read
@@ -21,11 +21,15 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: python -m pip install --upgrade requests
-      - name: Restore exact R45 base artifact
+      - name: Restore exact R110 canonical artifact through 2026-09-07
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 33166573845 -n all20-adjusted-v2b-20260828 -D scripts/r45_base
-      - name: Build canonical extension
+        run: gh run download 34181678827 -n all20-adjusted-through-20260907 -D scripts/r110_base
+      - name: Restore exact TWSE 2026-09-08 snapshot artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 34199098393 -n twse-close-20260908 -D scripts/twse_0908
+      - name: Extend exact R110 canonical by one trading day
         working-directory: scripts
         env:
           R45_GITHUB_TOKEN: ${{ github.token }}
