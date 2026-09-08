@@ -1,10 +1,17 @@
 from pathlib import Path
 import csv
+import os
 import re
 from decimal import Decimal
 
 import build_all20_adjusted_v2 as m
 import build_all20_adjusted_v2b  # robust TWSE price fetch + corrected R45 source-count gates
+
+# Use the workflow's read-only token for GitHub release metadata/assets so the
+# build does not depend on the runner's anonymous API rate-limit bucket.
+_token = os.environ.get('R45_GITHUB_TOKEN', '').strip()
+if _token:
+    m.S.headers.update({'Authorization': f'Bearer {_token}'})
 
 # One-off extension of the exact R45 canonical methodology.  The original R45
 # scripts/cutoff remain unchanged; this writes a separate artifact through 9/7.
