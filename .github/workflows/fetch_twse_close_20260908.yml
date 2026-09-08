@@ -1,0 +1,33 @@
+name: Fetch TWSE close 2026-09-08
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fetch_twse_close_20260908.py'
+      - '.github/workflows/fetch_twse_close_20260908.yml'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install --upgrade requests
+      - name: Fetch official TWSE close snapshot
+        working-directory: scripts
+        run: python fetch_twse_close_20260908.py
+      - name: Upload snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twse-close-20260908
+          path: scripts/output_twse_close_20260908/
+          if-no-files-found: error
+          retention-days: 30
