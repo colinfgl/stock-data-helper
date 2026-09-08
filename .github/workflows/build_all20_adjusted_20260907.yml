@@ -1,0 +1,31 @@
+name: Build all20 adjusted through 2026-09-07
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build_all20_adjusted_20260907.py'
+      - '.github/workflows/build_all20_adjusted_20260907.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install --upgrade requests
+      - name: Build canonical extension
+        working-directory: scripts
+        run: python build_all20_adjusted_20260907.py
+      - name: Upload extension artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all20-adjusted-through-20260907
+          path: scripts/output_all20_20260907/
+          if-no-files-found: error
+          retention-days: 90
