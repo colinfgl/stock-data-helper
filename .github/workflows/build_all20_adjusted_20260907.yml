@@ -27,6 +27,8 @@ jobs:
         run: gh run download 33166573845 -n all20-adjusted-v2b-20260828 -D scripts/r45_base
       - name: Build canonical extension
         working-directory: scripts
+        env:
+          R45_GITHUB_TOKEN: ${{ github.token }}
         run: python build_all20_adjusted_20260907.py
       - name: Upload extension artifact
         if: always()
