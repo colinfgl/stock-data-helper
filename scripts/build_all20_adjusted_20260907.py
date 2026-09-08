@@ -1,17 +1,19 @@
 from pathlib import Path
+import csv
 import re
+from decimal import Decimal
 
 import build_all20_adjusted_v2 as m
-import build_all20_adjusted_v2b  # applies robust TWSE month fetch + quarterly TWT49U + corrected R45 gates
+import build_all20_adjusted_v2b  # robust TWSE price fetch + corrected R45 source-count gates
 
-# Incremental extension of the R45 canonical logic.  Do not mutate the original
-# R45 scripts/cutoff; this wrapper builds a separate artifact through 2026-09-07.
+# One-off extension of the exact R45 canonical methodology.  The original R45
+# scripts/cutoff remain unchanged; this writes a separate artifact through 9/7.
 m.CUTOFF = '20260907'
 m.OUT = Path('output_all20_20260907')
 m.OUT.mkdir(exist_ok=True)
+BASE_ACTIONS = Path('r45_base/corporate_actions_all20.csv')
 
-# R45 ended 2026-08-17. There are 15 Taiwan trading dates from 8/18 through 9/7:
-# 8/18-21 (4), 8/24-28 (5), 8/31-9/4 (5), 9/7 (1).
+# R45 ended 2026-08-17.  There are 15 Taiwan trading dates 8/18 through 9/7.
 for code, (name, market, start, expected) in list(m.TARGETS.items()):
     m.TARGETS[code] = (name, market, start, expected + 15)
 
@@ -20,7 +22,7 @@ m.EXPECTED_TOTAL_NO_TRADE = 6
 m.EXPECTED_TOTAL_PRICE = 37233   # 36933 + 20*15
 m.EXPECTED_LAST3_EVENTS['3665'] = 10
 m.EXPECTED_LAST3_EVENTS['4916'] = 9
-m.EXPECTED_LAST3_EVENTS['6770'] = 4  # 2026-08-27 cash dividend adds one event
+m.EXPECTED_LAST3_EVENTS['6770'] = 4  # 8/27 cash dividend is post-R45
 
 
 def release_assets_through_w36():
@@ -70,6 +72,108 @@ def build_release_plus_20260907():
 
 
 m.build_release = build_release_plus_20260907
+
+
+def load_r45_actions():
+    if not BASE_ACTIONS.exists():
+        raise RuntimeError(f'missing restored R45 action file: {BASE_ACTIONS}')
+    out = []
+    with BASE_ACTIONS.open('r', encoding='utf-8-sig', newline='') as f:
+        for row in csv.DictReader(f):
+            code = row['code'].strip()
+            if code not in m.TARGETS:
+                continue
+            out.append({
+                'event_date': row['event_date'].strip(),
+                'code': code,
+                'name': row['name'].strip(),
+                'market': row['market'].strip(),
+                'previous_close': Decimal(row['official_previous_close']),
+                'reference_price': Decimal(row['official_reference_price']),
+                'factor': Decimal(row['factor']),
+                'official_source': row['official_source'].strip(),
+            })
+    if len(out) != 195:
+        raise RuntimeError(f'R45 base action count mismatch: {len(out)} != 195')
+    return out
+
+
+def postcutoff_twse_actions():
+    url = (
+        'https://www.twse.com.tw/rwd/zh/exRight/TWT49U'
+        '?startDate=20260818&endDate=20260907&response=json'
+    )
+    data = m.get(url, 30).json()
+    out = []
+    for row in data.get('data', []):
+        if len(row) < 5:
+            continue
+        event_date = m.norm_date(row[0])
+        code = re.sub(r'<[^>]+>', '', str(row[1])).strip()
+        pre = m.dec(row[3])
+        ref = m.dec(row[4])
+        if (
+            code in m.TARGETS
+            and m.TARGETS[code][1] == 'TWSE'
+            and event_date
+            and '20260818' <= event_date <= m.CUTOFF
+            and pre is not None and ref is not None and pre > 0 and ref > 0
+        ):
+            out.append({
+                'event_date': event_date, 'code': code,
+                'name': m.TARGETS[code][0], 'market': 'TWSE',
+                'previous_close': pre, 'reference_price': ref,
+                'factor': ref / pre, 'official_source': url,
+            })
+    return out, []
+
+
+def postcutoff_tpex_actions():
+    url = (
+        'https://www.tpex.org.tw/web/stock/exright/dailyquo/exDailyQ_result.php'
+        '?l=zh-tw&d=115/08/18&ed=115/09/07'
+    )
+    data = m.get(url, 30).json()
+    tables = data.get('tables') or []
+    rows = tables[0].get('data', []) if tables else (data.get('aaData') or data.get('data') or [])
+    out = []
+    for row in rows:
+        if len(row) < 5:
+            continue
+        event_date = m.norm_date(row[0])
+        code = re.sub(r'<[^>]+>', '', str(row[1])).strip()
+        pre = m.dec(row[3])
+        ref = m.dec(row[4])
+        if (
+            code in m.TARGETS
+            and m.TARGETS[code][1] == 'TPEX'
+            and event_date
+            and '20260818' <= event_date <= m.CUTOFF
+            and pre is not None and ref is not None and pre > 0 and ref > 0
+        ):
+            out.append({
+                'event_date': event_date, 'code': code,
+                'name': m.TARGETS[code][0], 'market': 'TPEX',
+                'previous_close': pre, 'reference_price': ref,
+                'factor': ref / pre, 'official_source': url,
+            })
+    return out, []
+
+
+def parse_twse_actions_base_plus_post():
+    base = [e for e in load_r45_actions() if e['market'] == 'TWSE']
+    post, errors = postcutoff_twse_actions()
+    return base + post, errors
+
+
+def parse_tpex_actions_base_plus_post():
+    base = [e for e in load_r45_actions() if e['market'] == 'TPEX']
+    post, errors = postcutoff_tpex_actions()
+    return base + post, errors
+
+
+m.parse_twse_actions = parse_twse_actions_base_plus_post
+m.parse_tpex_actions = parse_tpex_actions_base_plus_post
 
 if __name__ == '__main__':
     m.main()
