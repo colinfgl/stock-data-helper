@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Fetch official TAIEX daily closes for 2026 through 2026-09-08.
+"""Fetch official TAIEX daily history for PIT simulation warm-up and 2026 validation.
 
-Project utility for 存股作戰地圖. Data source is TWSE official
-MI_5MINS_HIST monthly JSON. This script only writes a research data file;
-it does not touch P4 or production model weights.
+Outputs:
+- output/taiex_2025_2026_official.csv : 2025-01-02 through 2026-09-08 (or first 2025 trading day)
+- output/taiex_2026_official.csv      : 2026-01-02 through 2026-09-08
+
+Project utility for 存股作戰地圖. Source is TWSE official MI_5MINS_HIST.
+This script only writes research data; it does not touch P4 or production weights.
 """
 from __future__ import annotations
 
@@ -14,9 +17,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-OUT = Path("output/taiex_2026_official.csv")
+OUT_ALL = Path("output/taiex_2025_2026_official.csv")
+OUT_2026 = Path("output/taiex_2026_official.csv")
 MAX_DATE = "2026-09-08"
-UA = "stock-data-helper taiex-2026-official/1.0"
+UA = "stock-data-helper taiex-pit-warmup/1.1"
 
 
 def get_json(url: str, retries: int = 5):
@@ -51,10 +55,11 @@ def fnum(x):
         return None
 
 
-def main():
+def fetch_year(year: int):
     rows = []
-    for month in range(1, 10):
-        datearg = f"2026{month:02d}01"
+    max_month = 9 if year == 2026 else 12
+    for month in range(1, max_month + 1):
+        datearg = f"{year:04d}{month:02d}01"
         urls = [
             f"https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date={datearg}&response=json",
             f"https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?date={datearg}&response=json",
@@ -70,11 +75,10 @@ def main():
             except Exception:
                 pass
         if not payload:
-            print(f"month={month:02d} no data", flush=True)
+            print(f"year={year} month={month:02d} no data", flush=True)
             continue
         fields = [str(x) for x in payload.get("fields", [])]
-        close_idx = 4
-        open_idx, high_idx, low_idx = 1, 2, 3
+        close_idx, open_idx, high_idx, low_idx = 4, 1, 2, 3
         for i, field in enumerate(fields):
             if "開盤" in field: open_idx = i
             if "最高" in field: high_idx = i
@@ -82,26 +86,45 @@ def main():
             if "收盤" in field: close_idx = i
         for r in payload.get("data", []):
             ds = roc_to_iso(r[0])
-            if not ds.startswith("2026-") or ds > MAX_DATE:
+            if not ds.startswith(f"{year:04d}-"):
+                continue
+            if ds > MAX_DATE:
                 continue
             if len(r) <= max(open_idx, high_idx, low_idx, close_idx):
                 continue
             op, hi, lo, cl = (fnum(r[open_idx]), fnum(r[high_idx]), fnum(r[low_idx]), fnum(r[close_idx]))
             if cl is None:
                 continue
-            rows.append({"date": ds, "open": op, "high": hi, "low": lo, "close": cl, "source": "TWSE MI_5MINS_HIST", "source_url": src})
-        print(f"month={month:02d} cumulative={len(rows)}", flush=True)
+            rows.append({"date": ds, "open": op, "high": hi, "low": lo, "close": cl,
+                         "source": "TWSE MI_5MINS_HIST", "source_url": src})
+        print(f"year={year} month={month:02d} cumulative={len(rows)}", flush=True)
         time.sleep(0.2)
+    return rows
 
-    uniq = {r["date"]: r for r in rows}
-    rows = [uniq[k] for k in sorted(uniq)]
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUT.open("w", encoding="utf-8-sig", newline="") as f:
+
+def write_csv(path: Path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["date", "open", "high", "low", "close", "source", "source_url"])
         w.writeheader(); w.writerows(rows)
-    if not rows or rows[-1]["date"] != MAX_DATE:
-        raise RuntimeError(f"TAIEX coverage incomplete: last={rows[-1]['date'] if rows else None}, expected={MAX_DATE}")
-    print(json.dumps({"status":"PASS","rows":len(rows),"first":rows[0]["date"],"last":rows[-1]["date"],"last_close":rows[-1]["close"],"formal_weight":0,"p4":"NO INTERACTION"}, ensure_ascii=False))
+
+
+def main():
+    rows = fetch_year(2025) + fetch_year(2026)
+    uniq = {r["date"]: r for r in rows}
+    rows = [uniq[k] for k in sorted(uniq)]
+    rows_2026 = [r for r in rows if r["date"].startswith("2026-")]
+    write_csv(OUT_ALL, rows)
+    write_csv(OUT_2026, rows_2026)
+    if not rows_2026 or rows_2026[-1]["date"] != MAX_DATE:
+        raise RuntimeError(f"2026 TAIEX coverage incomplete: last={rows_2026[-1]['date'] if rows_2026 else None}, expected={MAX_DATE}")
+    if not rows or not rows[0]["date"].startswith("2025-"):
+        raise RuntimeError("2025 warm-up history missing")
+    print(json.dumps({
+        "status":"PASS","rows_all":len(rows),"rows_2026":len(rows_2026),
+        "first":rows[0]["date"],"last":rows[-1]["date"],"last_close":rows[-1]["close"],
+        "formal_weight":0,"p4":"NO INTERACTION"
+    }, ensure_ascii=False))
 
 
 if __name__ == "__main__":
