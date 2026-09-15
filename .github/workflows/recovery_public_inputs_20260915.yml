@@ -15,7 +15,7 @@ jobs:
         run: |
           mkdir -p evidence
           python3 - <<'PY'
-          import json, pathlib, urllib.request, concurrent.futures, datetime, hashlib, time
+          import json, pathlib, urllib.request, concurrent.futures, datetime, hashlib
           p=pathlib.Path('evidence')
           now=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat()
           jobs={
@@ -24,11 +24,10 @@ jobs:
             'listed_20260911':'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=20260911&type=ALLBUT0999',
             'otc_20260914':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F14&id=&response=json',
             'otc_20260911':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F11&id=&response=json',
-            'otc_legacy':'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d=115/09/14&o=json',
             'calendar':'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear=115',
             'twse_actions':'https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate=20260911&endDate=20260914',
-            'tpex_actions':'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?date=2026%2F09%2F14&response=json',
-            'tpex_openapi':'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
+            'tpex_actions':'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=2026%2F09%2F14&endDate=2026%2F09%2F14&response=json',
+            'tpex_actions_legacy':'https://www.tpex.org.tw/web/stock/exright/dailyquo/exDailyQ_result.php?l=zh-tw&d=115/09/14&ed=115/09/14&o=json'
           }
           def f(item):
             name,url=item
