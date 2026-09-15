@@ -1,0 +1,47 @@
+name: recovery-etf-prices-20260915
+on:
+  push:
+    branches: [recovery-inputs-20260915]
+    paths: [.github/workflows/recovery_etf_prices_20260915.yml]
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Preserve alternate public ETF responses without filling missing values
+        shell: bash
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,pathlib,urllib.request,urllib.parse,concurrent.futures,datetime,hashlib
+          p=pathlib.Path('evidence');now=lambda:datetime.datetime.now(datetime.timezone.utc).isoformat()
+          jobs=[(code,host,mode) for code in ['00400A','0050','009820'] for host in ['query1.finance.yahoo.com','query2.finance.yahoo.com'] for mode in ['range','end_extended']]
+          def f(args):
+            code,host,mode=args;name=code+'_'+host.split('.')[0]+'_'+mode
+            params={'interval':'1d','events':'div,splits'}
+            if mode=='range':params['range']='1mo'
+            else:params.update(period1=int(datetime.datetime(2026,9,1,tzinfo=datetime.timezone.utc).timestamp()),period2=int(datetime.datetime(2026,9,16,tzinfo=datetime.timezone.utc).timestamp()))
+            url='https://'+host+'/v8/finance/chart/'+code+'.TW?'+urllib.parse.urlencode(params)
+            rec={'name':name,'symbol':code+'.TW','url':url,'started_at':now()}
+            try:
+              with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'}),timeout=20) as r:data=r.read();status=r.status
+              obj=json.loads(data);j=obj['chart']['result'][0];assert j['meta']['symbol']==code+'.TW'
+              (p/(name+'.json')).write_bytes(data)
+              rec.update(status='retrieved',retrieved_at=now(),http_status=status,sha256=hashlib.sha256(data).hexdigest(),bytes=len(data))
+              q=j['indicators']['quote'][0]['close'];a=j['indicators'].get('adjclose',[{}])[0].get('adjclose',[])
+              rec['eligible_bars']=[{'date':datetime.datetime.fromtimestamp(t,datetime.timezone.utc).strftime('%Y%m%d'),'close':c,'adjclose':v} for t,c,v in zip(j['timestamp'],q,a) if datetime.datetime.fromtimestamp(t,datetime.timezone.utc).strftime('%Y%m%d') in ['20260911','20260914']]
+            except Exception as e:rec.update(status='failed',error=str(e),completed_at=now())
+            return rec
+          started=now()
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:logs=list(pool.map(f,jobs))
+          (p/'fetch_receipt.json').write_text(json.dumps({'started_at':started,'completed_at':now(),'purpose':'Public ETF recovery. Responses may include Sep15 intraday; exclude every bar after Sep14 before any model use. Never fill missing adjusted prices.','sources':logs},ensure_ascii=False,indent=2))
+          print(json.dumps(logs,ensure_ascii=False,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: etf-adjusted-prices-20260914-alternates
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
