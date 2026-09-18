@@ -6,6 +6,7 @@ on:
       - '.github/workflows/premarket_input_repair_20260918.yml'
 permissions:
   contents: read
+  actions: read
 jobs:
   recover-public-inputs:
     runs-on: ubuntu-latest
@@ -14,43 +15,61 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch bounded official public market inputs
+      - name: Restore previously fetched public bytes without fetching again
+        uses: actions/download-artifact@v4
+        with:
+          name: official-input-recovery-20260918
+          path: official_input_recovery_20260918
+          github-token: ${{ github.token }}
+          run-id: 35318367120
+      - name: Validate payloads and retry only missing or invalid files
         run: |
           python - <<'PY'
           import concurrent.futures, datetime, hashlib, json, pathlib, time, urllib.request
-          out=pathlib.Path('official_input_recovery_20260918');out.mkdir()
+          out=pathlib.Path('official_input_recovery_20260918')
           jobs={
-            'FMTQIK_202609.json':'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260917&response=json',
-            'TAIEX_OHLC_202609.json':'https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?date=20260917&response=json',
-            'TWSE_0917.json':'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260917&type=ALLBUT0999&response=json',
-            'TWSE_0918.json':'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260918&type=ALLBUT0999&response=json',
-            'TPEX_0917.json':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F17&id=&response=json',
-            'TPEX_0918.json':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F18&id=&response=json',
-            'actions_0917_0918.json':'https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate=20260917&endDate=20260918',
-            'tpex_actions_0917_0918.json':'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=2026%2F09%2F17&endDate=2026%2F09%2F18&response=json'
-          }
-          def fetch(item):
-            name,url=item;attempts=[]
-            for i in range(2):
-              start=datetime.datetime.now(datetime.timezone.utc).isoformat()
-              try:
-                req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 official-input-recovery/1.0','Accept':'application/json'})
-                with urllib.request.urlopen(req,timeout=18) as r:
-                  body=r.read();status=r.status
-                (out/name).write_bytes(body);data=json.loads(body)
-                valid=isinstance(data,dict) and str(data.get('stat','')).lower()=='ok'
-                attempts.append({'started_at':start,'status':status,'bytes':len(body),'json_stat':data.get('stat')})
-                if valid:return {'name':name,'url':url,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'sha256':hashlib.sha256(body).hexdigest(),'status':'RAW_OK_NEEDS_DATE_VALIDATION','attempts':attempts}
-              except Exception as e:attempts.append({'started_at':start,'error':str(e)})
-              time.sleep(1)
-            return {'name':name,'url':url,'status':'FETCH_FAIL','attempts':attempts}
-          with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:results=list(pool.map(fetch,jobs.items()))
-          report={'purpose':'Public-data transport recovery only; not a forecast or a historical point-in-time claim','generated_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'results':results,'all_fetched':all(r['status'].startswith('RAW_OK') for r in results)}
-          (out/'fetch_manifest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
-          print(json.dumps({'all_fetched':report['all_fetched'],'files':[(r['name'],r['status']) for r in results]}))
+          'FMTQIK_202609.json':'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260917&response=json',
+          'TAIEX_OHLC_202609.json':'https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?date=20260917&response=json',
+          'TWSE_0917.json':'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260917&type=ALLBUT0999&response=json',
+          'TWSE_0918.json':'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260918&type=ALLBUT0999&response=json',
+          'TPEX_0917.json':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F17&id=&response=json',
+          'TPEX_0918.json':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026%2F09%2F18&id=&response=json',
+          'actions_0917_0918.json':'https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate=20260917&endDate=20260918',
+          'tpex_actions_0917_0918.json':'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=2026%2F09%2F17&endDate=2026%2F09%2F18&response=json'}
+          def valid(n,b):
+            try:
+              d=json.loads(b)
+              if str(d.get('stat','')).lower()!='ok':return False
+              if n.startswith(('TWSE_','TPEX_')):
+                expected='2026'+n.split('_')[1].split('.')[0]
+                return d.get('date')==expected and any(t.get('data') for t in d.get('tables',[]))
+              if n.startswith('actions_'):return d.get('strDate')=='20260917' and d.get('endDate')=='20260918'
+              if n.startswith('tpex_actions_'):return d.get('date')=='20260917~20260918'
+              def roc(s):
+                y,m,day=map(int,s.split('/'));return f'{y+1911:04}{m:02}{day:02}'
+              return any(roc(r[0])=='20260917' for r in d.get('data',[]))
+            except Exception:return False
+          def get(item):
+            n,url=item;p=out/n;attempts=[];reused=p.exists() and valid(n,p.read_bytes())
+            if not reused:
+              for attempt in range(2):
+                try:
+                  request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 official-recovery-v2','Accept':'application/json'})
+                  with urllib.request.urlopen(request,timeout=18) as r:b=r.read()
+                  if not valid(n,b):raise ValueError('payload/date/coverage validation failed')
+                  p.write_bytes(b);break
+                except Exception as e:attempts.append(str(e));time.sleep(1)
+            ok=p.exists() and valid(n,p.read_bytes())
+            return {'name':n,'url':url,'status':'PASS' if ok else 'FAIL','cache_reused':reused,'sha256':hashlib.sha256(p.read_bytes()).hexdigest() if ok else None,'attempt_errors':attempts}
+          with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:results=list(pool.map(get,jobs.items()))
+          report={'generated_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'source_run':35318367120,'results':results,'all_fetched':all(r['status']=='PASS' for r in results),'scope':'transport/date validation, NOT model validation or premarket performance'}
+          (out/'validated_manifest.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
+          print(json.dumps(report,ensure_ascii=False))
+          if not report['all_fetched']:raise SystemExit('INPUT_FAIL: one or more official files failed validation')
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: official-input-recovery-20260918
+          name: official-input-recovery-20260918-validated
           path: official_input_recovery_20260918/
           retention-days: 30
