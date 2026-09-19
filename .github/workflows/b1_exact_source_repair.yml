@@ -4,9 +4,9 @@ name: B1 exact missing-source repair
     inputs:
       phase:
         type: choice
-        description: 'Existing 2026-09-21 commissioning snapshot only; not a live prediction'
-        options: [remaining_scope, native_retry]
-        default: remaining_scope
+        description: '2026-09-21 commissioning snapshot only, not live prediction'
+        options: [actions_only, remaining_scope, native_retry]
+        default: actions_only
   push:
     paths:
       - '.github/workflows/b1_exact_source_repair.yml'
@@ -29,7 +29,13 @@ jobs:
         run: |
           mkdir -p b1_output
           python -c 'import json,datetime;json.dump({"stage":"BOOTSTRAP","run_id":"${{ github.run_id }}","started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),"formal_input_qualified":False},open("b1_output/bootstrap.json","w"))'
-      - name: Restore exact retained public evidence without refetching successful market data
+      - name: Retrieve only currently missing official corporate-action sources
+        if: ${{ inputs.phase != 'native_retry' && inputs.phase != 'remaining_scope' }}
+        run: |
+          cp scripts/premarket_b1_actions.py b1_output/
+          python scripts/premarket_b1_actions.py
+      - name: Restore exact retained public evidence for an explicitly selected historical retry
+        if: ${{ inputs.phase == 'native_retry' || inputs.phase == 'remaining_scope' }}
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -38,15 +44,16 @@ jobs:
           merge-multiple: true
           path: b1_restored
       - name: Prepare unchanged original validator and targeted tools
+        if: ${{ inputs.phase == 'native_retry' || inputs.phase == 'remaining_scope' }}
         run: |
           mkdir -p b1_output/runtime
           cp scripts/premarket_retry_chart.py scripts/premarket_b1_missing_scope.py b1_output/runtime/
           cp b1_restored/scripts/premarket_daily_inputs.py b1_output/runtime/
           python -c 'import hashlib,pathlib;assert hashlib.sha256(pathlib.Path("b1_output/runtime/premarket_daily_inputs.py").read_bytes()).hexdigest()=="7673ce89cefae65ac1beaf8f7f5404c40192f22bbf6667e5ab1b0f9166893fb5"'
-      - name: Check previously unverified public universe and missing action families only
-        if: ${{ inputs.phase != 'native_retry' }}
+      - name: Unverified public universe check only when explicitly selected
+        if: ${{ inputs.phase == 'remaining_scope' }}
         run: python b1_output/runtime/premarket_b1_missing_scope.py
-      - name: Explicit native-only retry, never invoked by remaining-scope phase
+      - name: Native-only retry only when explicitly selected
         if: ${{ inputs.phase == 'native_retry' }}
         run: |
           python b1_output/runtime/premarket_retry_chart.py --baseline b1_restored/official_daily_inputs --receipt-sha256 218b7c4c91b6d4dd6444dec895ae817577d49fc722727009e43e5dabf13bf8c0 --target-date 2026-09-21 --symbols 0050.TW --execute --out b1_output/native_retry
@@ -58,5 +65,6 @@ jobs:
           path: |
             b1_output/
             b1_scope_output/
+            b1_actions_output/
           if-no-files-found: error
           retention-days: 30
