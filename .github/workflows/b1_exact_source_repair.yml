@@ -1,12 +1,6 @@
 name: B1 exact missing-source repair
 'on':
   workflow_dispatch:
-    inputs:
-      phase:
-        type: choice
-        description: '2026-09-21 commissioning snapshot only, not live prediction'
-        options: [actions_only, remaining_scope, native_retry]
-        default: actions_only
   push:
     paths:
       - '.github/workflows/b1_exact_source_repair.yml'
@@ -19,52 +13,46 @@ concurrency:
 jobs:
   repair-only-missing:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Record bootstrap before external artifact access
+      - name: Capture only unresolved route responses and two full native historical series
         run: |
-          mkdir -p b1_output
-          python -c 'import json,datetime;json.dump({"stage":"BOOTSTRAP","run_id":"${{ github.run_id }}","started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),"formal_input_qualified":False},open("b1_output/bootstrap.json","w"))'
-      - name: Retrieve only currently missing official corporate-action sources
-        if: ${{ inputs.phase != 'native_retry' && inputs.phase != 'remaining_scope' }}
-        run: |
-          cp scripts/premarket_b1_actions.py b1_output/
-          python scripts/premarket_b1_actions.py
-      - name: Restore exact retained public evidence for an explicitly selected historical retry
-        if: ${{ inputs.phase == 'native_retry' || inputs.phase == 'remaining_scope' }}
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: '35414229000'
-          artifact-ids: '10577563243'
-          merge-multiple: true
-          path: b1_restored
-      - name: Prepare unchanged original validator and targeted tools
-        if: ${{ inputs.phase == 'native_retry' || inputs.phase == 'remaining_scope' }}
-        run: |
-          mkdir -p b1_output/runtime
-          cp scripts/premarket_retry_chart.py scripts/premarket_b1_missing_scope.py b1_output/runtime/
-          cp b1_restored/scripts/premarket_daily_inputs.py b1_output/runtime/
-          python -c 'import hashlib,pathlib;assert hashlib.sha256(pathlib.Path("b1_output/runtime/premarket_daily_inputs.py").read_bytes()).hexdigest()=="7673ce89cefae65ac1beaf8f7f5404c40192f22bbf6667e5ab1b0f9166893fb5"'
-      - name: Unverified public universe check only when explicitly selected
-        if: ${{ inputs.phase == 'remaining_scope' }}
-        run: python b1_output/runtime/premarket_b1_missing_scope.py
-      - name: Native-only retry only when explicitly selected
-        if: ${{ inputs.phase == 'native_retry' }}
-        run: |
-          python b1_output/runtime/premarket_retry_chart.py --baseline b1_restored/official_daily_inputs --receipt-sha256 218b7c4c91b6d4dd6444dec895ae817577d49fc722727009e43e5dabf13bf8c0 --target-date 2026-09-21 --symbols 0050.TW --execute --out b1_output/native_retry
-      - name: Preserve exact new raw evidence even when source qualification fails
+          mkdir -p b1_final_source
+          cat > b1_final_source/collect.py <<'PY'
+          import datetime as dt,hashlib,json,pathlib,urllib.request,urllib.parse,concurrent.futures as cf
+          out=pathlib.Path('b1_final_source')
+          def stamp():return dt.datetime.now(dt.timezone.utc).isoformat()
+          paths=['reducation/TWTAUU','reducation/TWTAVU','split/TWTCAU','split/TWTC9U','change/TWTB7U','change/TWTB8U']
+          jobs=[(p.split('/')[-1],'https://www.twse.com.tw/rwd/zh/'+p+'?response=json&startDate=20260917&endDate=20260921') for p in paths]
+          jobs += [('twse_reporting_script','https://www.twse.com.tw/res/js/web-report.js'),('tpex_reduction_notice','https://www.tpex.org.tw/zh-tw/announce/market/reduction.html'),('tpex_global_script','https://www.tpex.org.tw/rsrc/asset/js/global.js'),('tsmc_exdiv_reference','https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate=20260916&endDate=20260916')]
+          for symbol in ('2330.TW','3661.TW'):
+              jobs.append(('native_full_'+symbol,'https://query1.finance.yahoo.com/v8/finance/chart/'+symbol+'?period1=1514736000&period2=1789747200&interval=1d&events=div%2Csplits&includeAdjustedClose=true'))
+          def get(job):
+              key,url=job;r={'key':key,'url':url,'started_at':stamp(),'formal_input_qualified':False}
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json,text/html'})
+                  with urllib.request.urlopen(req,timeout=20) as f:b=f.read();r.update(http_status=f.status,final_url=f.url,content_type=f.headers.get('Content-Type'))
+                  (out/(key+'.raw')).write_bytes(b);r.update(status='FETCHED',path=key+'.raw',sha256=hashlib.sha256(b).hexdigest(),bytes=len(b),retrieved_at=stamp())
+                  try:p=json.loads(b);r.update(payload_type=type(p).__name__,provider_status=p.get('stat') if isinstance(p,dict) else None)
+                  except ValueError:r['payload_type']='NOT_JSON'
+              except Exception as e:r.update(status='FETCH_FAILED',error=str(e),completed_at=stamp())
+              return r
+          receipt={'started_at':stamp(),'sources':[],'formal_input_qualified':False,'model_runs':0,'previous_successful_universe_refetches':0,'purpose':'Only missing official action routes and two revised adjusted-history dependencies; never substitute metadata/raw prices for missing native adjusted values.'}
+          with cf.ThreadPoolExecutor(max_workers=3) as pool:
+              for row in pool.map(get,jobs):receipt['sources'].append(row);(out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
+          receipt['completed_at']=stamp();(out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
+          print(json.dumps({'sources':len(receipt['sources']),'formal_input_qualified':False}))
+          PY
+          python b1_final_source/collect.py
+      - name: Preserve missing-source evidence and code
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: b1-exact-source-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            b1_output/
-            b1_scope_output/
-            b1_actions_output/
+          name: b1-final-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: b1_final_source/
           if-no-files-found: error
           retention-days: 30
