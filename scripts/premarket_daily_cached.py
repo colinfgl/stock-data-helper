@@ -17,6 +17,21 @@ def checked(root,item):
  if item.get('bytes') is not None and p.stat().st_size!=item['bytes']:raise InputError('CACHE_SOURCE_SIZE')
  return p
 
+def collect_actions(out,dates):
+ prev=dates['previous_session']
+ end=dates['target_date'].replace('-','');ps=f'{prev[:4]}/{prev[4:6]}/{prev[6:]}';es=dates['target_date'].replace('-','/')
+ # Current announcements can change while dated prices stay unchanged. Refresh only these bounded action sources.
+ jobs=[('twse_exdiv.json',f'https://www.twse.com.tw/rwd/zh/exRight/TWT49U?response=json&startDate={prev}&endDate={end}'),
+ ('tpex_exdiv.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={ps}&endDate={es}&response=json'),
+ ('twse_reduction.json',f'https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?response=json&startDate={prev}&endDate={end}'),
+ ('tpex_reduction.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate={ps}&endDate={es}&response=json'),
+ ('twse_split.json',f'https://www.twse.com.tw/rwd/zh/change/TWTB8U?response=json&startDate={prev}&endDate={end}'),
+ ('tpex_split.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/pvChgRslt?startDate={ps}&endDate={es}&response=json')]
+ def action(j):
+  p,m=get_json(j[1],out/j[0],attempt_limit=1);m['role']='CURRENT_ACTION_REFERENCE';return m
+ with cf.ThreadPoolExecutor(max_workers=3)as pool:actions=list(pool.map(action,jobs))
+ return actions
+
 def run(seed,out,symbols,requested='auto'):
  out=pathlib.Path(out)
  if out.exists():raise InputError('OUTPUT_EXISTS')
@@ -40,7 +55,7 @@ def run(seed,out,symbols,requested='auto'):
   if old and (old['dates']!=dates):old=None
  if old is None:
   result=collect(out/'fresh',requested,symbols)
-  result['cache_mode']='FRESH_DATED_SOURCE_SET';result['requested_symbols']=symbols;result['additional_action_refresh_required']=True
+  result['cache_mode']='FRESH_DATED_SOURCE_SET';result['requested_symbols']=symbols;result['additional_sources']=collect_actions(out,result['dates']);result['additional_action_refresh_required']=False
   put(out/'daily_receipt.json',result)
   return result
  dates=old['dates'];prev,cut=dates['previous_session'],dates['price_cutoff'];records=[]
@@ -69,17 +84,7 @@ def run(seed,out,symbols,requested='auto'):
    except Exception as e:meta['validation_error']=str(e)
   return {'symbol':sym,'status':'BLOCKED','formal_input_qualified':False,'reused':False,'attempts':attempts}
  with cf.ThreadPoolExecutor(max_workers=3) as pool:charts=list(pool.map(one,symbols))
- end=dates['target_date'].replace('-','');ps=f'{prev[:4]}/{prev[4:6]}/{prev[6:]}';es=dates['target_date'].replace('-','/')
- # Current announcements can change while dated prices stay unchanged. Refresh only these bounded action sources.
- jobs=[('twse_exdiv.json',f'https://www.twse.com.tw/rwd/zh/exRight/TWT49U?response=json&startDate={prev}&endDate={end}'),
- ('tpex_exdiv.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={ps}&endDate={es}&response=json'),
- ('twse_reduction.json',f'https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?response=json&startDate={prev}&endDate={end}'),
- ('tpex_reduction.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate={ps}&endDate={es}&response=json'),
- ('twse_split.json',f'https://www.twse.com.tw/rwd/zh/change/TWTB8U?response=json&startDate={prev}&endDate={end}'),
- ('tpex_split.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/pvChgRslt?startDate={ps}&endDate={es}&response=json')]
- def action(j):
-  p,m=get_json(j[1],out/j[0],attempt_limit=1);m['role']='CURRENT_ACTION_REFERENCE';return m
- with cf.ThreadPoolExecutor(max_workers=3)as pool:actions=list(pool.map(action,jobs))
+ actions=collect_actions(out,dates)
  r={'started_at':started,'completed_at':stamp(),'target_date':dates['target_date'],'dates':dates,'expected_symbols':symbols,'reused_sources':records,
  'charts':charts,'additional_sources':actions,'native_adjusted_pass':sum(c['status']=='NATIVE_ADJUSTED_CROSSCHECK_PASS' for c in charts),
  'native_adjusted_blocked':[c['symbol']for c in charts if c['status']!='NATIVE_ADJUSTED_CROSSCHECK_PASS'],
