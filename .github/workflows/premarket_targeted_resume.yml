@@ -12,15 +12,13 @@ on:
       source_plan:
         description: 'Explicit allowlisted source plan for supplement mode'
         default: ''
-  push:
-    paths: ['.github/workflows/premarket_targeted_resume.yml']
 permissions: {contents: read, actions: read}
 concurrency:
   group: targeted-public-resume-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   daily_source:
-    if: github.event_name == 'push' || inputs.operation == 'daily'
+    if: inputs.operation == 'daily'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -58,9 +56,9 @@ jobs:
           if-no-files-found: error
       - name: Scope notice
         if: always()
-        run: echo 'Public source acquisition only. Verify the actual checkout commit and source hashes; no forecast, private portfolio or model.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Public source acquisition only. Verify actual checkout commit and source hashes; no forecast, private portfolio or model.' >> "$GITHUB_STEP_SUMMARY"
   supplement:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'supplement'
+    if: inputs.operation == 'supplement'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
