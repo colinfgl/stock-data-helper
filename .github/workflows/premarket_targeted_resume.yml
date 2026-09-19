@@ -4,20 +4,14 @@ on:
     inputs:
       operation:
         type: choice
-        options: [resume, supplement]
-        default: supplement
-      baseline_run_id:
-        description: 'Exact existing public acquisition run'
-        default: '35414229000'
+        options: [daily, supplement]
+        default: daily
       target_date:
-        description: 'Must match baseline target, not a live-date default'
-        default: '2026-09-21'
-      symbols:
-        description: 'Explicit public tickers only'
-        default: ''
+        description: 'auto uses actual clock and official calendar; source snapshot only'
+        default: auto
       source_plan:
-        description: 'Repository path of allowlisted public requests'
-        default: 'config/premarket_final_action_sources_20260919.json'
+        description: 'Explicit public source plan for supplement mode'
+        default: ''
   push:
     paths: ['.github/workflows/premarket_targeted_resume.yml']
 permissions: {contents: read, actions: read}
@@ -25,61 +19,64 @@ concurrency:
   group: targeted-public-resume-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  resume:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'resume'
+  daily_source:
+    if: github.event_name == 'push' || inputs.operation == 'daily'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - uses: actions/download-artifact@v4
+      - name: Restore verified public source cache when retained
+        continue-on-error: true
+        uses: actions/download-artifact@v4
         with:
-          name: premarket-public-input-${{ inputs.baseline_run_id }}
-          run-id: ${{ inputs.baseline_run_id }}
+          name: premarket-targeted-35418262065
+          run-id: 35418262065
           github-token: ${{ github.token }}
-          path: baseline
-      - name: Resume selected public inputs
+          path: seed
+      - name: Validate cache and fetch only missing or newly dated public inputs
         env:
-          TARGET_DATE: ${{ inputs.target_date }}
-          SYMBOLS: ${{ inputs.symbols }}
+          TARGET_DATE: ${{ inputs.target_date || 'auto' }}
         run: |
-          test -n "$SYMBOLS"
-          python scripts/premarket_resume_inputs.py --baseline baseline --out public_resume --target-date "$TARGET_DATE" --symbols "$SYMBOLS"
-      - name: Save sources and failure receipts
+          python -m py_compile scripts/premarket_daily_cached.py
+          python scripts/premarket_daily_cached.py --seed seed --out public_daily --symbols-file config/premarket_public_symbols.json --target-date "$TARGET_DATE"
+      - name: Preserve exact sources and failure receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: premarket-targeted-${{ github.run_id }}
+          name: premarket-daily-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            public_resume/
-            scripts/premarket_resume_inputs.py
+            public_daily/
+            scripts/premarket_daily_cached.py
             scripts/premarket_daily_inputs.py
+            config/premarket_public_symbols.json
           retention-days: 30
           if-no-files-found: error
+      - name: Scope notice
+        if: always()
+        run: echo 'Public source snapshot, not a prediction. Next-session dates on holidays do not imply live premarket delivery. Native gaps remain failures.' >> "$GITHUB_STEP_SUMMARY"
   supplement:
-    if: github.event_name == 'push' || inputs.operation == 'supplement'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'supplement'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Fetch only the explicit missing primary sources
+      - name: Fetch explicit missing sources
         env:
-          SOURCE_PLAN: ${{ inputs.source_plan || 'config/premarket_final_action_sources_20260919.json' }}
-        run: python scripts/premarket_source_supplement.py --plan "$SOURCE_PLAN" --out public_supplement
-      - name: Preserve bytes and limitations
+          SOURCE_PLAN: ${{ inputs.source_plan }}
+        run: |
+          test -n "$SOURCE_PLAN"
+          python scripts/premarket_source_supplement.py --plan "$SOURCE_PLAN" --out public_supplement
+      - name: Preserve source bytes and limitations
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: premarket-supplement-${{ github.run_id }}
+          name: premarket-supplement-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             public_supplement/
-            config/premarket_final_action_sources_20260919.json
             scripts/premarket_source_supplement.py
           retention-days: 30
           if-no-files-found: error
-      - name: Scope notice
-        if: always()
-        run: echo 'Public acquisition only. Transport success is not input qualification or forecast success.' >> "$GITHUB_STEP_SUMMARY"
