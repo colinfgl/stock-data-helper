@@ -15,44 +15,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Capture only unresolved route responses and two full native historical series
+      - name: Capture remaining OTC action sources using official menu and page declarations
         run: |
-          mkdir -p b1_final_source
-          cat > b1_final_source/collect.py <<'PY'
-          import datetime as dt,hashlib,json,pathlib,urllib.request,urllib.parse,concurrent.futures as cf
-          out=pathlib.Path('b1_final_source')
+          mkdir -p b1_otc_actions
+          cat > b1_otc_actions/collect.py <<'PY'
+          import datetime as dt,hashlib,json,pathlib,re,urllib.request,urllib.parse
+          out=pathlib.Path('b1_otc_actions');sources=[]
           def stamp():return dt.datetime.now(dt.timezone.utc).isoformat()
-          paths=['reducation/TWTAUU','reducation/TWTAVU','split/TWTCAU','split/TWTC9U','change/TWTB7U','change/TWTB8U']
-          jobs=[(p.split('/')[-1],'https://www.twse.com.tw/rwd/zh/'+p+'?response=json&startDate=20260917&endDate=20260921') for p in paths]
-          jobs += [('twse_reporting_script','https://www.twse.com.tw/res/js/web-report.js'),('tpex_reduction_notice','https://www.tpex.org.tw/zh-tw/announce/market/reduction.html'),('tpex_global_script','https://www.tpex.org.tw/rsrc/asset/js/global.js'),('tsmc_exdiv_reference','https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate=20260916&endDate=20260916')]
-          for symbol in ('2330.TW','3661.TW'):
-              jobs.append(('native_full_'+symbol,'https://query1.finance.yahoo.com/v8/finance/chart/'+symbol+'?period1=1514736000&period2=1789747200&interval=1d&events=div%2Csplits&includeAdjustedClose=true'))
-          def get(job):
-              key,url=job;r={'key':key,'url':url,'started_at':stamp(),'formal_input_qualified':False}
+          def get(key,url):
+              r={'key':key,'url':url,'retrieved_at':stamp(),'qualified':False};sources.append(r)
               try:
                   req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json,text/html'})
-                  with urllib.request.urlopen(req,timeout=20) as f:b=f.read();r.update(http_status=f.status,final_url=f.url,content_type=f.headers.get('Content-Type'))
-                  (out/(key+'.raw')).write_bytes(b);r.update(status='FETCHED',path=key+'.raw',sha256=hashlib.sha256(b).hexdigest(),bytes=len(b),retrieved_at=stamp())
-                  try:p=json.loads(b);r.update(payload_type=type(p).__name__,provider_status=p.get('stat') if isinstance(p,dict) else None)
-                  except ValueError:r['payload_type']='NOT_JSON'
-              except Exception as e:r.update(status='FETCH_FAILED',error=str(e),completed_at=stamp())
-              return r
-          receipt={'started_at':stamp(),'sources':[],'formal_input_qualified':False,'model_runs':0,'previous_successful_universe_refetches':0,'purpose':'Only missing official action routes and two revised adjusted-history dependencies; never substitute metadata/raw prices for missing native adjusted values.'}
-          with cf.ThreadPoolExecutor(max_workers=3) as pool:
-              for row in pool.map(get,jobs):receipt['sources'].append(row);(out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
-          receipt['completed_at']=stamp();(out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
-          print(json.dumps({'sources':len(receipt['sources']),'formal_input_qualified':False}))
+                  with urllib.request.urlopen(req,timeout=20) as f:b=f.read();r.update(http_status=f.status,content_type=f.headers.get('Content-Type'),final_url=f.url)
+                  (out/(key+'.raw')).write_bytes(b);r.update(status='FETCHED',path=key+'.raw',sha256=hashlib.sha256(b).hexdigest(),bytes=len(b))
+                  return b.decode('utf8')
+              except Exception as e:r.update(status='FETCH_FAILED',error=str(e));return None
+          result={'started_at':stamp(),'sources':sources,'scope_from':'2026-09-17','scope_through':'2026-09-21','price_requests':0,'model_runs':0,'formal_input_qualified':False}
+          menu=get('menu','https://www.tpex.org.tw/data/menu/zh-tw/menu.json')
+          get('reduction_notice','https://www.tpex.org.tw/www/zh-tw/bulletin/decap?startDate=2026%2F09%2F17&endDate=2026%2F09%2F21&response=json')
+          targets=[]
+          def walk(x):
+              if isinstance(x,list):
+                  for v in x:walk(v)
+              elif isinstance(x,dict):
+                  title=str(x.get('title',''));link=str(x.get('link',''))
+                  if ('面額' in title or '分割' in title) and link.startswith('/zh-tw/'):
+                      targets.append((title,'https://www.tpex.org.tw'+link))
+                  for k,v in x.items():
+                      if isinstance(v,(dict,list)):walk(v)
+          if menu:
+              try:walk(json.loads(menu))
+              except ValueError:pass
+          result['menu_matches']=targets
+          seen=set()
+          for i,(title,url) in enumerate(targets[:8]):
+              if url in seen:continue
+              seen.add(url);text=get('page_'+str(i),url)
+              if not text:continue
+              actions=re.findall(r'action:"([A-Za-z0-9_/-]+)"',text)
+              for j,a in enumerate(actions[:2]):
+                  if not a.startswith(('bulletin/','stock/','etf/','announce/')):continue
+                  get('data_'+str(i)+'_'+str(j),'https://www.tpex.org.tw/www/zh-tw/'+a+'?startDate=2026%2F09%2F17&endDate=2026%2F09%2F21&response=json')
+          result['completed_at']=stamp();(out/'receipt.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
+          print(json.dumps({'sources':len(sources),'menu_targets':len(targets),'formal_input_qualified':False}))
           PY
-          python b1_final_source/collect.py
-      - name: Preserve missing-source evidence and code
+          python b1_otc_actions/collect.py
+      - name: Preserve remaining evidence and exact source code
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: b1-final-source-${{ github.run_id }}-${{ github.run_attempt }}
-          path: b1_final_source/
+          name: b1-otc-actions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: b1_otc_actions/
           if-no-files-found: error
           retention-days: 30
