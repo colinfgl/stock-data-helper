@@ -1,8 +1,6 @@
 name: B1 alternative adjusted-source evidence
 on:
   workflow_dispatch:
-  push:
-    paths: ['.github/workflows/b1_alternative_adjusted_source_20260919.yml']
 permissions:
   contents: read
 jobs:
