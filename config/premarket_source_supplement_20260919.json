@@ -1,0 +1,14 @@
+[
+ {"name":"twse_reduction_range.json","url":"https://www.twse.com.tw/exchangeReport/TWTAUU?response=json&startDate=20260917&endDate=20260921","purpose":"Date-bounded reduction resumption references; reject response outside requested interval"},
+ {"name":"tpex_suspension_history.json","url":"https://www.tpex.org.tw/openapi/v1/tpex_spendi_history","purpose":"Historical trading suspension and resumption coverage; does not alone prove all reductions"},
+ {"name":"tpex_suspension_today.json","url":"https://www.tpex.org.tw/openapi/v1/tpex_spendi_today","purpose":"Current trading suspension announcements"},
+ {"name":"tpex_exright_prepost.json","url":"https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost","purpose":"Current ex-right and dividend announcements"},
+ {"name":"twse_mis_announcements.html","url":"https://mops.twse.com.tw/server-java/t39sb01?quick=1","purpose":"Primary split/reduction announcements linked by official reduction table"},
+ {"name":"twse_etf_0050.html","url":"https://www.twse.com.tw/zh/ETFortune/etfInfo/0050","purpose":"ETF dividend and split announcement sections"},
+ {"name":"twse_etf_00400A.html","url":"https://www.twse.com.tw/zh/ETFortune/etfInfo/00400A","purpose":"ETF dividend and split announcement sections"},
+ {"name":"twse_etf_009820.html","url":"https://www.twse.com.tw/zh/ETFortune/etfInfo/009820","purpose":"ETF dividend and split announcement sections"},
+ {"name":"yahoo_history_0050.html","url":"https://finance.yahoo.com/quote/0050.TW/history/","purpose":"Independent native historical page path; do not use quote metadata as adjusted close"},
+ {"name":"yahoo_history_00400A.html","url":"https://finance.yahoo.com/quote/00400A.TW/history/","purpose":"Independent native historical page path"},
+ {"name":"yahoo_history_009820.html","url":"https://finance.yahoo.com/quote/009820.TW/history/","purpose":"Independent native historical page path"},
+ {"name":"yuanta_0050.html","url":"https://www.yuantaetfs.com/product/detail/0050/Basic_information","purpose":"Primary issuer distribution and split references"}
+]
