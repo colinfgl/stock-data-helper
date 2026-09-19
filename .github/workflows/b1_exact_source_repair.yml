@@ -1,0 +1,80 @@
+name: B1 exact missing-source repair
+'on':
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/b1_exact_source_repair.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: b1-exact-source-repair
+  cancel-in-progress: false
+jobs:
+  repair-only-missing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore exact original public evidence, not re-fetch market data
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: '35414229000'
+          artifact-ids: '10574937468'
+          merge-multiple: true
+          path: b1_restored
+      - name: Execute original targeted plan and bounded native-query alternatives
+        run: |
+          mkdir -p b1_output/runtime
+          cp scripts/premarket_retry_chart.py b1_output/runtime/
+          cp b1_restored/scripts/premarket_daily_inputs.py b1_output/runtime/
+          cat > b1_output/runtime/execute.py <<'PY'
+          import datetime as dt, hashlib, json, pathlib, sys, urllib.parse
+          import premarket_daily_inputs as core
+          import premarket_retry_chart as retry
+          root=pathlib.Path('b1_restored/official_daily_inputs')
+          out=pathlib.Path('b1_output')
+          expected='a69560b52db6e7c1841a2263eefac99813e83f2be587898db82cf17ba8853514'
+          expected_core='7673ce89cefae65ac1beaf8f7f5404c40192f22bbf6667e5ab1b0f9166893fb5'
+          if retry.digest(pathlib.Path(core.__file__).read_bytes()) != expected_core:
+              raise ValueError('ORIGINAL_VALIDATOR_HASH_MISMATCH')
+          plan=retry.make_plan(root,expected,'2026-09-21',['0050.TW'])
+          core.dump(out/'plan.json',plan)
+          result={'started_at':core.stamp(),'task':'B1_EXACT_MISSING_NATIVE_SOURCE','baseline_receipt_sha256':expected,'plan':plan,'native_attempts':[],'official_source_refetches':0,'successful_chart_refetches':0,'model_runs':0,'native_retry_pass':False,'formal_input_qualified':False}
+          core.dump(out/'result.json',result)
+          item=plan['retry_charts'][0]
+          first=core.date_of(plan['sessions'][0])-dt.timedelta(days=7)
+          last=core.date_of(plan['sessions'][-1])+dt.timedelta(days=1)
+          p1=int(dt.datetime.combine(first,dt.time(),core.TZ).timestamp())
+          p2=int(dt.datetime.combine(last,dt.time(),core.TZ).timestamp())
+          # Native provider responses only. No replacing nulls, metadata prices or synthetic adjustment.
+          for host in ('query1.finance.yahoo.com','query2.finance.yahoo.com'):
+              url=f'https://{host}/v8/finance/chart/0050.TW?'+urllib.parse.urlencode({'period1':p1,'period2':p2,'interval':'1d','events':'div,splits','includeAdjustedClose':'true'})
+              payload,src=core.get_json(url,out/f'0050_{host.split(".")[0]}_native.json',attempt_limit=1)
+              try:
+                  if payload is None: raise ValueError('SOURCE_FETCH_FAILED')
+                  validation=core.validate_chart(payload,'0050.TW',plan['sessions'],item['official_closes'])
+              except Exception as e:
+                  validation={'status':'FAIL','error':str(e)}
+              result['native_attempts'].append({'source':src,'validation':validation})
+              result['native_retry_pass']=validation['status']!='FAIL'
+              core.dump(out/'result.json',result)
+              if result['native_retry_pass']:break
+          result['completed_at']=core.stamp()
+          core.dump(out/'result.json',result)
+          print(json.dumps(result,ensure_ascii=False))
+          raise SystemExit(0 if result['native_retry_pass'] else 2)
+          PY
+          python b1_output/runtime/execute.py
+      - name: Preserve new raw responses and exact verification evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b1-exact-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: b1_output/
+          if-no-files-found: error
+          retention-days: 30
