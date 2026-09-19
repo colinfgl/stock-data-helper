@@ -19,12 +19,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Restore exact original public evidence, not re-fetch market data
+      - name: Record bootstrap before external artifact access
+        run: |
+          mkdir -p b1_output
+          python -c 'import json,datetime;json.dump({"stage":"BOOTSTRAP","run_id":"${{ github.run_id }}","started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),"formal_input_qualified":False},open("b1_output/bootstrap.json","w"))'
+      - name: Restore exact verified retained public evidence, not re-fetch market data
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: '35414229000'
-          artifact-ids: '10574937468'
+          artifact-ids: '10577563243'
           merge-multiple: true
           path: b1_restored
       - name: Execute original targeted plan and bounded native-query alternatives
@@ -38,7 +42,7 @@ jobs:
           import premarket_retry_chart as retry
           root=pathlib.Path('b1_restored/official_daily_inputs')
           out=pathlib.Path('b1_output')
-          expected='a69560b52db6e7c1841a2263eefac99813e83f2be587898db82cf17ba8853514'
+          expected='218b7c4c91b6d4dd6444dec895ae817577d49fc722727009e43e5dabf13bf8c0'
           expected_core='7673ce89cefae65ac1beaf8f7f5404c40192f22bbf6667e5ab1b0f9166893fb5'
           if retry.digest(pathlib.Path(core.__file__).read_bytes()) != expected_core:
               raise ValueError('ORIGINAL_VALIDATOR_HASH_MISMATCH')
