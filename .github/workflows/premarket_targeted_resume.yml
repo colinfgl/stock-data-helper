@@ -17,7 +17,7 @@ on:
         default: ''
       source_plan:
         description: 'Repository path of explicit allowlisted public requests'
-        default: 'config/premarket_source_supplement_20260919.json'
+        default: 'config/premarket_action_supplement_20260919.json'
   push:
     paths:
       - '.github/workflows/premarket_targeted_resume.yml'
@@ -72,7 +72,7 @@ jobs:
           python-version: '3.12'
       - name: Fetch only explicit missing primary sources
         env:
-          SOURCE_PLAN: ${{ inputs.source_plan || 'config/premarket_source_supplement_20260919.json' }}
+          SOURCE_PLAN: ${{ inputs.source_plan || 'config/premarket_action_supplement_20260919.json' }}
         run: python scripts/premarket_source_supplement.py --plan "$SOURCE_PLAN" --out public_supplement
       - name: Preserve source bytes and limitations
         if: always()
@@ -81,7 +81,7 @@ jobs:
           name: premarket-supplement-${{ github.run_id }}
           path: |
             public_supplement/
-            config/premarket_source_supplement_20260919.json
+            config/premarket_action_supplement_20260919.json
             scripts/premarket_source_supplement.py
           retention-days: 30
           if-no-files-found: error
