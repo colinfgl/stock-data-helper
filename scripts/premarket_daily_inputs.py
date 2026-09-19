@@ -84,20 +84,65 @@ def validate_chart(payload,symbol,days,official):
     return {'status':'NATIVE_ADJUSTED_CROSSCHECK_PASS','symbol':symbol,'sessions':checked,'corporate_action_exhaustiveness':'NOT_ESTABLISHED_BY_CHART_ALONE','formal_input_qualified':False,'limitation':'Native adjusted series alone does not prove complete reduction/split coverage or pre-target corporate actions.'}
 
 def get_json(url,path,attempt_limit=2):
-    errors=[];path=pathlib.Path(path)
+    """Preserve bounded failure evidence without changing financial validation."""
+    import socket, ssl
+    if type(attempt_limit) is not int or not 1 <= attempt_limit <= 2:
+        raise InputError('ATTEMPT_LIMIT_MUST_BE_ONE_OR_TWO')
+    errors=[];diagnostics=[];path=pathlib.Path(path)
+    def reject_constant(value): raise ValueError('NONFINITE_JSON:'+value)
     for n in range(attempt_limit):
+        response=None;body=None;retryable=False
+        info={'attempt':n+1,'requested_at':stamp(),'root_cause':'UNDETERMINED'}
         try:
             req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 premarket-data/1.0','Accept':'application/json'})
-            with urllib.request.urlopen(req,timeout=20) as r:b=r.read()
-            p=json.loads(b)
+            response=urllib.request.urlopen(req,timeout=20)
+            info['http_status']=response.getcode()
+            body=response.read(33554433)
+            if len(body)>33554432:raise InputError('RESPONSE_SIZE_LIMIT')
+            p=json.loads(body,parse_constant=reject_constant)
             if not isinstance(p,dict):raise InputError('JSON_OBJECT_REQUIRED')
-            path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b)
-            return p,{'url':url,'path':str(path.name),'sha256':sha(b),'bytes':len(b),'retrieved_at':stamp(),'attempts':n+1,'errors':errors,'status':'FETCHED'}
-        except Exception as e:
+            path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
+            return p,{'url':url,'path':str(path.name),'sha256':sha(body),'bytes':len(body),'retrieved_at':stamp(),
+                      'attempts':n+1,'errors':errors,'diagnostics':diagnostics,'status':'FETCHED'}
+        except urllib.error.HTTPError as e:
+            response=e;info.update(http_status=e.code,category='HTTP_ERROR',error_type=type(e).__name__)
+            if e.code in (401,403):info['category']='HTTP_AUTHORIZATION_ERROR'
+            elif e.code==429:info['category']='HTTP_RATE_LIMITED'
+            elif e.code>=500:info['category']='HTTP_SERVER_ERROR'
+            retryable=e.code==429 or 500<=e.code<600
+            headers=e.headers or {}
+            info['headers']={k:headers.get(k) for k in ('Content-Type','Retry-After') if headers.get(k) is not None}
+            try:body=e.read(262145)
+            except Exception as read_error:info['body_read_error']=type(read_error).__name__+': '+str(read_error)
             errors.append(type(e).__name__+': '+str(e))
-            if isinstance(e,urllib.error.HTTPError) and e.code in (401,403,404):break
-            if n+1<attempt_limit:time.sleep(1)
-    return None,{'url':url,'path':str(path.name),'sha256':None,'retrieved_at':stamp(),'attempts':len(errors),'errors':errors,'status':'FETCH_FAILED'}
+        except (urllib.error.URLError,TimeoutError,ssl.SSLError) as e:
+            reason=e.reason if isinstance(e,urllib.error.URLError) else e
+            category='NETWORK_DNS_ERROR' if isinstance(reason,socket.gaierror) else 'NETWORK_TIMEOUT' if isinstance(reason,TimeoutError) else 'NETWORK_TLS_ERROR' if isinstance(reason,ssl.SSLError) else 'NETWORK_ERROR'
+            info.update(category=category,error_type=type(e).__name__)
+            retryable=category!='NETWORK_TLS_ERROR'
+            errors.append(type(e).__name__+': '+str(e))
+        except Exception as e:
+            info.update(category='LOCAL_SAVE_ERROR' if isinstance(e,OSError) else 'CONTENT_ERROR',error_type=type(e).__name__)
+            errors.append(type(e).__name__+': '+str(e))
+        finally:
+            if response is not None:
+                try:response.close()
+                except Exception:info['response_close_failed']=True
+        info['received_at']=stamp()
+        if body is not None:
+            full=len(body)<=262144;raw=body[:262144]
+            evidence=path.with_name(path.name+f'.attempt-{n+1}.response.raw')
+            try:
+                evidence.parent.mkdir(parents=True,exist_ok=True)
+                with evidence.open('xb') as f:f.write(raw)
+                info.update(body_path=evidence.name,body_sha256=sha(raw),body_bytes=len(raw),body_complete=full)
+            except OSError as save_error:
+                info['evidence_save_error']=type(save_error).__name__+': '+str(save_error)
+        diagnostics.append(info)
+        if not retryable:break
+        if n+1<attempt_limit:time.sleep(1)
+    return None,{'url':url,'path':str(path.name),'sha256':None,'retrieved_at':stamp(),'attempts':len(errors),
+                 'errors':errors,'diagnostics':diagnostics,'status':'FETCH_FAILED'}
 
 def collect(out,target='auto',symbols=()):
     out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True);started=stamp();records=[];validation=[]
