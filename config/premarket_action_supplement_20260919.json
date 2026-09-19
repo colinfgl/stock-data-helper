@@ -1,0 +1,5 @@
+[
+ {"name":"twse_par_value_range.json","url":"https://www.twse.com.tw/rwd/zh/change/TWTB8U?startDate=20260917&endDate=20260921&response=json","purpose":"Primary par-value change resumption reference table, requested 2026-09-17 through 2026-09-21"},
+ {"name":"tpex_reduction_range.json","url":"https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate=2026/09/17&endDate=2026/09/21&response=json","purpose":"Primary OTC reduction resumption reference table; verify returned interval"},
+ {"name":"tpex_nav.html","url":"https://www.tpex.org.tw/zh-tw/","purpose":"Locate exact primary par-value change and reduction announcement routes, no inferred data"}
+]
