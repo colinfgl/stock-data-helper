@@ -7,10 +7,10 @@ on:
         options: [daily, supplement]
         default: daily
       target_date:
-        description: 'auto uses actual clock and official calendar; source snapshot only'
+        description: 'Actual-clock source date; auto is not a forecast'
         default: auto
       source_plan:
-        description: 'Explicit public source plan for supplement mode'
+        description: 'Explicit allowlisted source plan for supplement mode'
         default: ''
   push:
     paths: ['.github/workflows/premarket_targeted_resume.yml']
@@ -25,9 +25,10 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
+        with: {ref: main}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Restore verified public source cache when retained
+      - name: Restore checked public cache if retained
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -35,19 +36,21 @@ jobs:
           run-id: 35418262065
           github-token: ${{ github.token }}
           path: seed
-      - name: Validate cache and fetch only missing or newly dated public inputs
+      - name: Collect current dated public sources
         env:
           TARGET_DATE: ${{ inputs.target_date || 'auto' }}
         run: |
+          git rev-parse HEAD > public_runtime_commit.txt
           python -m py_compile scripts/premarket_daily_cached.py
           python scripts/premarket_daily_cached.py --seed seed --out public_daily --symbols-file config/premarket_public_symbols.json --target-date "$TARGET_DATE"
-      - name: Preserve exact sources and failure receipts
+      - name: Preserve exact inputs and failures
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: premarket-daily-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             public_daily/
+            public_runtime_commit.txt
             scripts/premarket_daily_cached.py
             scripts/premarket_daily_inputs.py
             config/premarket_public_symbols.json
@@ -55,22 +58,23 @@ jobs:
           if-no-files-found: error
       - name: Scope notice
         if: always()
-        run: echo 'Public source snapshot, not a prediction. Next-session dates on holidays do not imply live premarket delivery. Native gaps remain failures.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Public source acquisition only. Verify the actual checkout commit and source hashes; no forecast, private portfolio or model.' >> "$GITHUB_STEP_SUMMARY"
   supplement:
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'supplement'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+        with: {ref: main}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Fetch explicit missing sources
+      - name: Fetch selected public sources
         env:
           SOURCE_PLAN: ${{ inputs.source_plan }}
         run: |
           test -n "$SOURCE_PLAN"
           python scripts/premarket_source_supplement.py --plan "$SOURCE_PLAN" --out public_supplement
-      - name: Preserve source bytes and limitations
+      - name: Preserve source evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
