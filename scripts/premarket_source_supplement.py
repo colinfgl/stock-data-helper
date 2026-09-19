@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch an explicit public-only source plan; preserve all bytes and errors."""
 import argparse, concurrent.futures as cf, datetime as dt, hashlib, json, pathlib, re, urllib.parse, urllib.request
-ALLOWED={'www.twse.com.tw','openapi.twse.com.tw','www.tpex.org.tw','mops.twse.com.tw','finance.yahoo.com','tw.stock.yahoo.com','www.yuantaetfs.com'}
+ALLOWED={'www.twse.com.tw','openapi.twse.com.tw','www.tpex.org.tw','mops.twse.com.tw','mopsov.twse.com.tw','finance.yahoo.com','tw.stock.yahoo.com','www.yuantaetfs.com'}
 def digest(b):return hashlib.sha256(b).hexdigest()
 def stamp():return dt.datetime.now(dt.timezone.utc).isoformat()
 def run(plan,out):
@@ -27,8 +27,8 @@ def run(plan,out):
   except Exception as e:r['error']=type(e).__name__+': '+str(e)
   return r
  with cf.ThreadPoolExecutor(max_workers=3)as pool:results=list(pool.map(get,jobs))
- receipt={'started_at':started,'completed_at':stamp(),'sources':results,'formal_input_qualified':False,'scope':'Source retrieval only. No inferred prices or model/portfolio operations.'}
+ receipt={'started_at':started,'completed_at':stamp(),'sources':results,'transport_complete':bool(results) and all(r['status']=='FETCHED' for r in results),'formal_input_qualified':False,'scope':'Source retrieval only. No inferred prices or model/portfolio operations.'}
  (out/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2))
- print(json.dumps(receipt,ensure_ascii=False));return receipt
+ print(json.dumps({'completed_at':receipt['completed_at'],'transport_complete':receipt['transport_complete'],'sources':[{'name':s['name'],'status':s['status'],'error':s.get('error')} for s in results],'formal_input_qualified':False},ensure_ascii=False));return receipt
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--plan',required=True);p.add_argument('--out',required=True);a=p.parse_args();run(a.plan,a.out)
+ p=argparse.ArgumentParser();p.add_argument('--plan',required=True);p.add_argument('--out',required=True);a=p.parse_args();r=run(a.plan,a.out);raise SystemExit(0 if r['transport_complete'] else 2)
