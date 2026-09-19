@@ -4,6 +4,7 @@ No portfolio/model inputs, no synthetic adjusted prices, no cron or broker actio
 """
 from __future__ import annotations
 import argparse, concurrent.futures as cf, datetime as dt, hashlib, json, pathlib, shutil, re
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 from premarket_daily_inputs import collect, date_of, get_json, official_quotes, validate_chart, resolve_calendar, calendar_days, InputError
 TZ=ZoneInfo('Asia/Taipei')
@@ -16,6 +17,27 @@ def checked(root,item):
  if not p.is_relative_to(root) or not p.is_file() or sha(p)!=item['sha256']:raise InputError('CACHE_SOURCE_HASH_OR_PATH')
  if item.get('bytes') is not None and p.stat().st_size!=item['bytes']:raise InputError('CACHE_SOURCE_SIZE')
  return p
+
+def native_query_urls(symbol, previous, cutoff, observed_day):
+ # A relative native query is an alternate provider path, not replacement data.
+ # Use it only while both exact required sessions are within the last month.
+ a=int(dt.datetime.combine(date_of(previous)-dt.timedelta(days=100),dt.time(),TZ).timestamp())
+ z=int(dt.datetime.combine(date_of(cutoff)+dt.timedelta(days=1),dt.time(),TZ).timestamp())
+ recent=0 <= (observed_day-date_of(previous)).days <= 20 and date_of(cutoff)<=observed_day
+ common={'interval':'1d','events':'div,splits','includeAdjustedClose':'true'}
+ for host in ('query1.finance.yahoo.com','query2.finance.yahoo.com'):
+  params=dict(common)
+  if recent: params['range']='1mo'
+  else: params.update(period1=a,period2=z)
+  yield f'https://{host}/v8/finance/chart/{symbol}?'+urlencode(params)
+
+def acquisition_failed(result):
+ # A transport failure need not have a path; never silently omit that failure.
+ charts=result.get('charts',[])
+ if any(c.get('status')!='NATIVE_ADJUSTED_CROSSCHECK_PASS' for c in charts):return True
+ if result.get('official_validation_pass') is False or result.get('transport_complete') is False:return True
+ actions=result.get('additional_sources')
+ return not isinstance(actions,list) or len(actions)!=6 or any(s.get('status')!='FETCHED' for s in actions)
 
 def collect_actions(out,dates):
  prev=dates['previous_session']
@@ -39,6 +61,7 @@ def run(seed,out,symbols,requested='auto'):
  symbols=sorted(symbols)
  if not symbols or len(symbols)!=len(set(symbols)) or any(not re.fullmatch(r'[A-Z0-9]{4,8}\.(TW|TWO)',s) for s in symbols):raise InputError('EXACT_PUBLIC_SYMBOL_SCOPE_REQUIRED')
  paths=list(pathlib.Path(seed).rglob('resume_receipt.json'));old=None
+ if len(paths)>1:raise InputError('AMBIGUOUS_CACHE_RECEIPTS_RESTORE_EXACT_SEED')
  if len(paths)==1:
   rp=paths[0];old=json.loads(rp.read_text());root=rp.parent
   if sorted(old['expected_symbols'])!=symbols:raise InputError('CACHE_SCOPE_MISMATCH')
@@ -74,9 +97,9 @@ def run(seed,out,symbols,requested='auto'):
    f=checked(root,c);v=validate_chart(json.loads(f.read_text()),sym,[prev,cut],official)
    cp=copyrec(dict(c,bytes=f.stat().st_size),'native_'+sym+'.json')
    return dict(v,path=cp['path'],sha256=cp['sha256'],bytes=f.stat().st_size,reused=True,attempts=[])
-  attempts=[];a=int(dt.datetime.combine(date_of(prev)-dt.timedelta(days=100),dt.time(),TZ).timestamp());z=int(dt.datetime.combine(date_of(cut)+dt.timedelta(days=1),dt.time(),TZ).timestamp())
-  for n,h in enumerate(('query1.finance.yahoo.com','query2.finance.yahoo.com'),1):
-   f=out/f'chart_{sym}_{n}.json';u=f'https://{h}/v8/finance/chart/{sym}?period1={a}&period2={z}&interval=1d&events=div%2Csplits&includeAdjustedClose=true'
+  attempts=[]
+  for n,u in enumerate(native_query_urls(sym,prev,cut,now.date()),1):
+   f=out/f'chart_{sym}_{n}.json'
    p,meta=get_json(u,f,attempt_limit=1);attempts.append(meta)
    try:
     v=validate_chart(p,sym,[prev,cut],official)
@@ -99,6 +122,6 @@ if __name__=='__main__':
   r=run(a.seed,a.out,json.loads(pathlib.Path(a.symbols_file).read_text()),a.target_date)
   checks=r.get('charts',[]);blocked=[c['symbol']for c in checks if c['status']!='NATIVE_ADJUSTED_CROSSCHECK_PASS']
   print(json.dumps({'mode':r.get('cache_mode'),'target':r.get('dates',{}).get('target_date'),'native_pass':len(checks)-len(blocked),'blocked':blocked,'formal_input_qualified':False}))
-  raise SystemExit(2 if blocked or r.get('official_validation_pass') is False or r.get('transport_complete') is False or any(s.get('status')!='FETCHED' for s in r.get('additional_sources',[]) if 'path' in s) else 0)
+  raise SystemExit(2 if acquisition_failed(r) else 0)
  except (InputError,KeyError,OSError,ValueError)as e:
   put(pathlib.Path(a.out)/'failure_receipt.json',{'status':'BLOCKED','reason':str(e),'completed_at':stamp(),'formal_input_qualified':False});raise
