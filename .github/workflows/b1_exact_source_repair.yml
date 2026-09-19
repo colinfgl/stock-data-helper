@@ -1,9 +1,6 @@
 name: B1 exact missing-source repair
 'on':
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/b1_exact_source_repair.yml'
 permissions:
   contents: read
   actions: read
