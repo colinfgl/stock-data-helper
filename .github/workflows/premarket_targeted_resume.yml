@@ -1,0 +1,58 @@
+name: premarket-targeted-public-resume
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_run_id:
+        description: 'Existing public acquisition run to resume'
+        default: '35414229000'
+      target_date:
+        description: 'Must match the baseline target date; commissioning only'
+        default: '2026-09-21'
+      symbols:
+        description: 'Public tickers only; never include portfolio, costs or model data'
+        default: '00400A.TW,0050.TW,009820.TW,1503.TW,1504.TW,1513.TW,1519.TW,1597.TW,2049.TW,2059.TW,2207.TW,2231.TW,2301.TW,2303.TW,2308.TW,2313.TW,2314.TW,2317.TW,2330.TW,2345.TW,2359.TW,2367.TW,2368.TW,2371.TW,2376.TW,2382.TW,2383.TW,2395.TW,2439.TW,2454.TW,2458.TW,2466.TW,2471.TW,2630.TW,2634.TW,2645.TW,2834.TW,2885.TW,3004.TW,3017.TW,3019.TW,3029.TW,3037.TW,3105.TWO,3138.TW,3163.TWO,3189.TW,3211.TWO,3227.TWO,3293.TWO,3324.TWO,3363.TWO,3443.TW,3450.TW,3481.TW,3491.TWO,3529.TWO,3653.TW,3661.TW,3665.TW,3711.TW,3718.TWO,4540.TW,4541.TWO,4572.TW,4583.TW,4585.TW,4916.TW,4931.TWO,4953.TWO,4958.TW,4979.TWO,5222.TW,5274.TWO,5351.TWO,6112.TW,6166.TW,6188.TWO,6214.TW,6223.TWO,6282.TW,6285.TW,6412.TW,6414.TW,6442.TW,6451.TW,6510.TWO,6515.TW,6526.TW,6669.TW,6689.TW,6752.TWO,6753.TW,6770.TW,6781.TW,6831.TW,6874.TWO,7402.TWO,8033.TW,8046.TW,8086.TWO,8147.TWO,8222.TW'
+  push:
+    paths:
+      - '.github/workflows/premarket_targeted_resume.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: targeted-public-resume-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check syntax
+        run: python -m py_compile scripts/premarket_resume_inputs.py scripts/premarket_daily_inputs.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: premarket-public-input-${{ inputs.baseline_run_id || '35414229000' }}
+          run-id: ${{ inputs.baseline_run_id || '35414229000' }}
+          github-token: ${{ github.token }}
+          path: baseline
+      - name: Resume exact missing public inputs
+        env:
+          TARGET_DATE: ${{ inputs.target_date || '2026-09-21' }}
+          SYMBOLS: ${{ inputs.symbols || '00400A.TW,0050.TW,009820.TW,1503.TW,1504.TW,1513.TW,1519.TW,1597.TW,2049.TW,2059.TW,2207.TW,2231.TW,2301.TW,2303.TW,2308.TW,2313.TW,2314.TW,2317.TW,2330.TW,2345.TW,2359.TW,2367.TW,2368.TW,2371.TW,2376.TW,2382.TW,2383.TW,2395.TW,2439.TW,2454.TW,2458.TW,2466.TW,2471.TW,2630.TW,2634.TW,2645.TW,2834.TW,2885.TW,3004.TW,3017.TW,3019.TW,3029.TW,3037.TW,3105.TWO,3138.TW,3163.TWO,3189.TW,3211.TWO,3227.TWO,3293.TWO,3324.TWO,3363.TWO,3443.TW,3450.TW,3481.TW,3491.TWO,3529.TWO,3653.TW,3661.TW,3665.TW,3711.TW,3718.TWO,4540.TW,4541.TWO,4572.TW,4583.TW,4585.TW,4916.TW,4931.TWO,4953.TWO,4958.TW,4979.TWO,5222.TW,5274.TWO,5351.TWO,6112.TW,6166.TW,6188.TWO,6214.TW,6223.TWO,6282.TW,6285.TW,6412.TW,6414.TW,6442.TW,6451.TW,6510.TWO,6515.TW,6526.TW,6669.TW,6689.TW,6752.TWO,6753.TW,6770.TW,6781.TW,6831.TW,6874.TWO,7402.TWO,8033.TW,8046.TW,8086.TWO,8147.TWO,8222.TW' }}
+        run: python scripts/premarket_resume_inputs.py --baseline baseline --out public_resume --target-date "$TARGET_DATE" --symbols "$SYMBOLS"
+      - name: Save exact sources and failure receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: premarket-targeted-${{ github.run_id }}
+          path: |
+            public_resume/
+            scripts/premarket_resume_inputs.py
+            scripts/premarket_daily_inputs.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Scope notice
+        if: always()
+        run: echo 'Public acquisition only. Native chart validation is not corporate-action completeness, model success or user report delivery.' >> "$GITHUB_STEP_SUMMARY"
