@@ -4,7 +4,7 @@ on:
     inputs:
       mode:
         type: choice
-        options: [normal, repair]
+        options: [normal, repair, actions]
         default: normal
       target_date:
         description: 'YYYY-MM-DD; auto is commissioning only, not a live prediction'
@@ -23,6 +23,9 @@ on:
       baseline_receipt_sha:
         description: 'Expected SHA256 of acquisition_receipt.json, repair only'
         required: false
+      action_start:
+        description: 'YYYY-MM-DD; actions mode only'
+        required: false
   push:
     paths:
       - '.github/workflows/premarket_input_repair_20260918.yml'
@@ -34,7 +37,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   recover-public-inputs:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[B1-targeted-commission]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[B1-actions-commission]')
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -43,24 +46,31 @@ jobs:
         with:
           python-version: '3.12'
       - name: Restore exact public baseline without re-querying successful sources
-        if: github.event_name == 'push' || inputs.mode == 'repair'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'repair'
         uses: actions/download-artifact@v4
         with:
-          artifact-ids: ${{ github.event_name == 'push' && '10577563243' || inputs.baseline_artifact }}
-          run-id: ${{ github.event_name == 'push' && '35414229000' || inputs.baseline_run }}
+          artifact-ids: ${{ inputs.baseline_artifact }}
+          run-id: ${{ inputs.baseline_run }}
           github-token: ${{ github.token }}
           path: restored_public
           merge-multiple: true
       - name: Targeted native data repair
-        if: github.event_name == 'push' || inputs.mode == 'repair'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'repair'
         env:
-          TARGET_DATE: ${{ github.event_name == 'push' && '2026-09-21' || inputs.target_date }}
-          SYMBOL: ${{ github.event_name == 'push' && '0050.TW' || inputs.symbols }}
-          RECEIPT_SHA: ${{ github.event_name == 'push' && '218b7c4c91b6d4dd6444dec895ae817577d49fc722727009e43e5dabf13bf8c0' || inputs.baseline_receipt_sha }}
+          TARGET_DATE: ${{ inputs.target_date }}
+          SYMBOL: ${{ inputs.symbols }}
+          RECEIPT_SHA: ${{ inputs.baseline_receipt_sha }}
         run: |
           python scripts/premarket_targeted_sources.py --baseline restored_public/official_daily_inputs --receipt-sha "$RECEIPT_SHA" --symbol "$SYMBOL" --target "$TARGET_DATE" --out targeted_inputs
+      - name: Missing action categories only
+        if: github.event_name == 'push' || inputs.mode == 'actions'
+        env:
+          START_DATE: ${{ github.event_name == 'push' && '2026-09-17' || inputs.action_start }}
+          END_DATE: ${{ github.event_name == 'push' && '2026-09-21' || inputs.target_date }}
+        run: |
+          python scripts/premarket_action_sources.py --start "$START_DATE" --end "$END_DATE" --out action_inputs
       - name: Normal date-aware public acquisition
-        if: github.event_name == 'workflow_dispatch' && inputs.mode != 'repair'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'normal'
         env:
           TARGET_DATE: ${{ inputs.target_date || 'auto' }}
           SYMBOLS: ${{ inputs.symbols || '2330.TW,0050.TW,5274.TWO' }}
@@ -74,11 +84,13 @@ jobs:
           path: |
             official_daily_inputs/
             targeted_inputs/
+            action_inputs/
             scripts/premarket_daily_inputs.py
             scripts/premarket_targeted_sources.py
+            scripts/premarket_action_sources.py
           retention-days: 30
           if-no-files-found: error
       - name: State scope
         if: always()
         run: |
-          echo 'Public input acquisition only. Native chart validation is not full corporate-action qualification, model success, or user delivery. No private portfolio or model is uploaded.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public acquisition only. Preserve raw failures. Native price validity or action transport alone is not full formal input qualification, model success, or user delivery. No private portfolio or model is uploaded.' >> "$GITHUB_STEP_SUMMARY"
