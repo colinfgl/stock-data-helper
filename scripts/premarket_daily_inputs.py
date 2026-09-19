@@ -112,6 +112,9 @@ def get_json(url,path,attempt_limit=2):
             retryable=e.code==429 or 500<=e.code<600
             headers=e.headers or {}
             info['headers']={k:headers.get(k) for k in ('Content-Type','Retry-After') if headers.get(k) is not None}
+            if headers.get('Retry-After'):
+                # Do not violate a provider cooldown or sleep through the report.
+                retryable=False;info['retry_deferred_by_provider']=True
             try:body=e.read(262145)
             except Exception as read_error:info['body_read_error']=type(read_error).__name__+': '+str(read_error)
             errors.append(type(e).__name__+': '+str(e))
@@ -141,8 +144,19 @@ def get_json(url,path,attempt_limit=2):
         diagnostics.append(info)
         if not retryable:break
         if n+1<attempt_limit:time.sleep(1)
-    return None,{'url':url,'path':str(path.name),'sha256':None,'retrieved_at':stamp(),'attempts':len(errors),
-                 'errors':errors,'diagnostics':diagnostics,'status':'FETCH_FAILED'}
+    metadata={'url':url,'path':str(path.name),'sha256':None,'retrieved_at':stamp(),'attempts':len(errors),
+              'errors':errors,'diagnostics':diagnostics,'status':'FETCH_FAILED'}
+    # Preserve metadata even when a caller aborts before writing its batch receipt.
+    sidecar=path.with_name(path.name+'.failure.json')
+    try:
+        sidecar.parent.mkdir(parents=True,exist_ok=True)
+        with sidecar.open('x',encoding='utf8') as f:
+            json.dump(metadata,f,ensure_ascii=False,indent=2,allow_nan=False)
+        metadata['failure_metadata_path']=sidecar.name
+        metadata['failure_metadata_sha256']=sha(sidecar.read_bytes())
+    except OSError as e:
+        metadata['failure_metadata_save_error']=type(e).__name__+': '+str(e)
+    return None,metadata
 
 def collect(out,target='auto',symbols=()):
     out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True);started=stamp();records=[];validation=[]
