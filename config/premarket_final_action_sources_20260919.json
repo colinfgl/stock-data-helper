@@ -1,0 +1,4 @@
+[
+ {"name":"tpex_par_value_range.json","url":"https://www.tpex.org.tw/www/zh-tw/bulletin/pvChgRslt?startDate=2026%2F09%2F17&endDate=2026%2F09%2F21&response=json","purpose":"Primary OTC par-value-change resumption table; require exact returned query interval"},
+ {"name":"twse_split_announcements_current.html","url":"https://mopsov.twse.com.tw/server-java/t39sb01?quick=1","purpose":"Replacement official MOPS host for split/reduction disclosure linked from primary exchange table; current retrieval not historical point-in-time proof"}
+]
