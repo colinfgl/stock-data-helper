@@ -4,24 +4,27 @@ on:
     inputs:
       mode:
         type: choice
-        options: [normal, repair, actions]
+        options: [normal, repair, actions, inventory]
         default: normal
       target_date:
         description: 'YYYY-MM-DD; auto is commissioning only, not a live prediction'
         required: false
         default: auto
       symbols:
-        description: 'Public tickers only; repair accepts one failed ticker'
+        description: 'Public native tickers only for normal/repair mode'
         required: false
         default: '2330.TW,0050.TW,5274.TWO'
+      codes:
+        description: 'Public exchange codes only for inventory mode'
+        required: false
       baseline_run:
-        description: 'Exact prior public acquisition run, repair only'
+        description: 'Exact prior public acquisition run'
         required: false
       baseline_artifact:
-        description: 'Exact immutable artifact ID, repair only'
+        description: 'Exact immutable artifact ID'
         required: false
       baseline_receipt_sha:
-        description: 'Expected SHA256 of acquisition_receipt.json, repair only'
+        description: 'Expected SHA256 of acquisition_receipt.json'
         required: false
       action_start:
         description: 'YYYY-MM-DD; actions mode only'
@@ -37,7 +40,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   recover-public-inputs:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[B1-actions-commission]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[B1-inventory-commission]')
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -46,11 +49,11 @@ jobs:
         with:
           python-version: '3.12'
       - name: Restore exact public baseline without re-querying successful sources
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'repair'
+        if: github.event_name == 'push' || inputs.mode == 'repair' || inputs.mode == 'inventory'
         uses: actions/download-artifact@v4
         with:
-          artifact-ids: ${{ inputs.baseline_artifact }}
-          run-id: ${{ inputs.baseline_run }}
+          artifact-ids: ${{ github.event_name == 'push' && '10577563243' || inputs.baseline_artifact }}
+          run-id: ${{ github.event_name == 'push' && '35414229000' || inputs.baseline_run }}
           github-token: ${{ github.token }}
           path: restored_public
           merge-multiple: true
@@ -63,12 +66,20 @@ jobs:
         run: |
           python scripts/premarket_targeted_sources.py --baseline restored_public/official_daily_inputs --receipt-sha "$RECEIPT_SHA" --symbol "$SYMBOL" --target "$TARGET_DATE" --out targeted_inputs
       - name: Missing action categories only
-        if: github.event_name == 'push' || inputs.mode == 'actions'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'actions'
         env:
-          START_DATE: ${{ github.event_name == 'push' && '2026-09-17' || inputs.action_start }}
-          END_DATE: ${{ github.event_name == 'push' && '2026-09-21' || inputs.target_date }}
+          START_DATE: ${{ inputs.action_start }}
+          END_DATE: ${{ inputs.target_date }}
         run: |
           python scripts/premarket_action_sources.py --start "$START_DATE" --end "$END_DATE" --out action_inputs
+      - name: Account for requested native price universe
+        if: github.event_name == 'push' || inputs.mode == 'inventory'
+        env:
+          TARGET_DATE: ${{ github.event_name == 'push' && '2026-09-21' || inputs.target_date }}
+          RECEIPT_SHA: ${{ github.event_name == 'push' && '218b7c4c91b6d4dd6444dec895ae817577d49fc722727009e43e5dabf13bf8c0' || inputs.baseline_receipt_sha }}
+          CODES: ${{ github.event_name == 'push' && '00400A,0050,009820,2207,2308,2317,2330,2368,2376,2382,2383,2454,2634,2834,2885,3481,3665,4916,6770,3293,3491,2303,3443,6526,3189,2345,3017,3661,6669,3037,6223,6442,3324,3653,8046,3450,3363,3163,4979,6451,6515,6510,3529,5222,6285,3138,2314,2313,2367,8033,2645,2630,6753,3718,7402,2231,3105,8086,2466,4541,4572,8222,3004,2359,5351,2395,6166,6414,6188,2049,4540,1597,4583,2439,3227,2458,3019,6214,6752,6112,3029,6689,4953,2471,6874,2301,6412,6282,6781,4931,3211,1519,1503,1513,2371,6806,6831,8147,3711,1504,4958,4585,5274,2059' || inputs.codes }}
+        run: |
+          python scripts/premarket_price_inventory.py --baseline restored_public/official_daily_inputs --receipt-sha "$RECEIPT_SHA" --codes "$CODES" --target "$TARGET_DATE" --out inventory_inputs
       - name: Normal date-aware public acquisition
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'normal'
         env:
@@ -85,12 +96,14 @@ jobs:
             official_daily_inputs/
             targeted_inputs/
             action_inputs/
+            inventory_inputs/
             scripts/premarket_daily_inputs.py
             scripts/premarket_targeted_sources.py
             scripts/premarket_action_sources.py
+            scripts/premarket_price_inventory.py
           retention-days: 30
           if-no-files-found: error
       - name: State scope
         if: always()
         run: |
-          echo 'Public acquisition only. Preserve raw failures. Native price validity or action transport alone is not full formal input qualification, model success, or user delivery. No private portfolio or model is uploaded.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public acquisition only. Completion of requested inventory does not certify all prices, corporate actions, a model or user delivery. Preserve every blocked symbol. No private holdings, costs or model uploaded.' >> "$GITHUB_STEP_SUMMARY"
