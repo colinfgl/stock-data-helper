@@ -27,3 +27,5 @@ jobs:
           path: public_gap_sources/
           retention-days: 30
           if-no-files-found: error
+
+# Second pass: six remaining public requests only; no repeated successful sources.
