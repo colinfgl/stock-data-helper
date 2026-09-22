@@ -1,0 +1,29 @@
+name: public-gap-recovery-20260922
+on:
+  push:
+    branches: ['repair/public-gaps-20260922']
+    paths: ['.github/workflows/public_gap_recovery_20260922.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect specified public sources
+        run: python3 scripts/collect_public_gaps_20260922.py
+      - name: Preserve code and checkout
+        if: always()
+        run: |
+          mkdir -p public_gap_sources
+          cp scripts/collect_public_gaps_20260922.py public_gap_sources/collector.py
+          git rev-parse HEAD > public_gap_sources/checkout_sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-gap-recovery-${{ github.run_id }}
+          path: public_gap_sources/
+          retention-days: 30
+          if-no-files-found: error
