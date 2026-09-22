@@ -1,18 +1,7 @@
 """Bounded public-only retrieval. No portfolio, prediction or synthetic values."""
 import concurrent.futures as cf,datetime as dt,hashlib,json,pathlib,urllib.request,urllib.parse
 OUT=pathlib.Path('public_gap_sources');OUT.mkdir(exist_ok=False)
-DATES_PLACEHOLDER = ['20260825', '20260826', '20260827', '20260828', '20260831', '20260901', '20260902', '20260903', '20260904', '20260907', '20260908', '20260909', '20260910', '20260911', '20260914', '20260915', '20260916', '20260917', '20260918', '20260921']
-JOBS=[]
-for code in ['00400A','009820']:
- for host,period in [('query1.finance.yahoo.com','1mo'),('query2.finance.yahoo.com','3mo')]:
-  JOBS.append((f'chart_{code}_{period}.json',f'https://{host}/v8/finance/chart/{code}.TW?interval=1d&range={period}&events=div%2Csplits&includeAdjustedClose=true'))
-for code in ['2330','2383']:
- for month in ['20260601','20260701','20260801','20260901']:
-  JOBS.append((f'price_{code}_{month}.json',f'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date={month}&stockNo={code}&response=json'))
-for date in DATES_PLACEHOLDER:
- JOBS.append((f'chips_{date}.json',f'https://www.twse.com.tw/rwd/zh/fund/T86?date={date}&selectType=ALLBUT0999&response=json'))
-JOBS.append(('exdiv.json','https://www.twse.com.tw/rwd/zh/exRight/TWT49U?response=json&startDate=20260601&endDate=20260921'))
-JOBS.append(('margin.json','https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260921&selectType=ALL&response=json'))
+JOBS=[('index_20260601.json', 'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260601&response=json'), ('index_20260701.json', 'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260701&response=json'), ('index_20260801.json', 'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260801&response=json'), ('index_20260901.json', 'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20260901&response=json'), ('chart_00400A_exact.json', 'https://query1.finance.yahoo.com/v8/finance/chart/00400A.TW?interval=1d&period1=1789660800&period2=1790006400&events=div%2Csplits&includeAdjustedClose=true'), ('chart_009820_exact.json', 'https://query1.finance.yahoo.com/v8/finance/chart/009820.TW?interval=1d&period1=1789660800&period2=1790006400&events=div%2Csplits&includeAdjustedClose=true')]
 def now():return dt.datetime.now(dt.timezone.utc).isoformat()
 def get(job):
  name,url=job;r={'name':name,'url':url,'started_at':now(),'status':'FAILED'}
