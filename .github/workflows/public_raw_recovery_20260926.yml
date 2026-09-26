@@ -1,0 +1,58 @@
+name: public-raw-recovery-20260926
+on:
+  push:
+    branches: [data-recovery/public-raw-20260926]
+    paths: [.github/workflows/public_raw_recovery_20260926.yml]
+permissions:
+  contents: read
+jobs:
+  fetch-public-originals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch public bytes with bounded timeouts
+        shell: bash
+        run: |
+          mkdir -p public-raw
+          python3 - <<'PY'
+          import concurrent.futures, datetime, hashlib, json, pathlib, urllib.request, urllib.error
+          root=pathlib.Path('public-raw')
+          sources={
+           'twse_mi_index_20260924.json':'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260924&type=ALLBUT0999&response=json',
+           'tpex_daily_20260924.json':'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026/09/24&id=&response=json',
+           'twse_calendar_2026.json':'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear=115',
+           'airoha_financial.html':'https://www.airoha.com/investors/finance/statements',
+           'airoha_presentations.html':'https://www.airoha.com/investors/law',
+           'guc_q2_2026.pdf':'https://www.guc-asic.com/upload/2026_07_30/8_202607301505036267hcvmS1.pdf',
+           'yuanta_distribution_calendar.html':'https://www.yuanta.com.tw/eYuanta/Securities/Calendar/List?APIType=7&NowType=0&TargetMonth=9&TargetYear=2026'
+          }
+          def fetch(item):
+              name,url=item
+              rec={'name':name,'requested_url':url,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'classification':'UNVALIDATED_RESPONSE'}
+              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (public-data-research)','Accept':'*/*'})
+              try:
+                  try: response=urllib.request.urlopen(req,timeout=35)
+                  except urllib.error.HTTPError as e: response=e
+                  with response as r:
+                      b=r.read(20000001)
+                      rec.update(status=r.status,final_url=r.geturl(),content_type=r.headers.get('Content-Type',''))
+                      if len(b)>20000000: raise ValueError('response exceeds 20MB limit')
+                      (root/name).write_bytes(b)
+                      rec.update(bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:
+                  rec.update(error=type(e).__name__+': '+str(e),classification='TRANSPORT_FAILED')
+              return rec
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+              results=list(pool.map(fetch,sources.items()))
+          manifest={'scope':'PUBLIC_ORIGINALS_ONLY_NOT_VALIDATED_MARKET_DATA','github_run_id':__import__('os').environ.get('GITHUB_RUN_ID'),'sources':results}
+          (root/'retrieval_manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(manifest,ensure_ascii=False,indent=2))
+          PY
+      - name: Preserve originals and transport failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-raw-20260926-${{ github.run_id }}
+          path: public-raw/
+          if-no-files-found: error
+          retention-days: 30
