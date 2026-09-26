@@ -42,7 +42,7 @@ jobs:
               return json.loads(raw.decode('utf-8-sig'),object_pairs_hook=pairs,parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
           def validate(doc,key,date):
               if not isinstance(doc,dict): raise ValueError('NOT_OBJECT')
-              if doc.get('stat') not in (('ok','OK') if key=='tpex' else ('OK',)):
+              if doc.get('stat') not in (('ok','OK') if key in ('tpex','calendar') else ('OK',)):
                   raise ValueError('RESPONSE_NOT_OK:'+str(doc.get('stat')))
               if key=='calendar':
                   if not doc.get('data'): raise ValueError('CALENDAR_EMPTY')
@@ -73,10 +73,14 @@ jobs:
                   if not valid: raise ValueError('NO_QUOTE_ROWS')
                   return {'status':'PARSED_EXACT_DATE','unique_symbols':len(seen),'valid_closes':valid,'unavailable_closes':unavailable}
               fields=doc.get('fields',[]);rows=doc.get('data',[])
-              if '日期' not in fields or '收盤指數' not in fields: raise ValueError('OHLC_SCHEMA')
+              for f in ('日期','開盤指數','最高指數','最低指數','收盤指數'):
+                  if fields.count(f)!=1: raise ValueError('OHLC_SCHEMA:'+f)
               ds=f'{date.year-1911}/{date.month:02d}/{date.day:02d}'
               matches=[r for r in rows if str(r[fields.index('日期')])==ds]
-              if len(matches)!=1: raise ValueError('OHLC_DATE_MISSING_OR_DUPLICATE')
+              if len(matches)!=1 or len(matches[0])!=len(fields): raise ValueError('OHLC_DATE_MISSING_OR_DUPLICATE')
+              values=[decimal.Decimal(str(matches[0][fields.index(f)]).replace(',','')) for f in ('開盤指數','最高指數','最低指數','收盤指數')]
+              op,hi,lo,cl=values
+              if not all(n.is_finite() and n>0 for n in values) or not (lo<=op<=hi and lo<=cl<=hi): raise ValueError('OHLC_VALUES')
               return {'status':'PARSED_EXACT_DATE','matched_rows':1}
           def main():
               today=dt.datetime.now(ZoneInfo('Asia/Taipei')).date()
@@ -90,7 +94,7 @@ jobs:
               sources={
                 'twse':f'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={date:%Y%m%d}&type=ALLBUT0999&response=json',
                 'tpex':f'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={date:%Y/%m/%d}&id=&response=json',
-                'ohlc':f'https://www.twse.com.tw/rwd/zh/afterTrading/MI_5MINS_HIST?date={date:%Y%m%d}&response=json',
+                'ohlc':f'https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date={date:%Y%m%d}&response=json',
                 'calendar':f'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear={date.year-1911}'}
               def fetch(item):
                   key,url=item;history=[]
@@ -115,10 +119,12 @@ jobs:
                   return {'key':key,'attempts':history,'result':history[-1]}
               with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool: results=list(pool.map(fetch,sources.items()))
               ok=sum(x['result']['status']=='PARSED_EXACT_DATE' for x in results)
-              manifest={'schema':'PUBLIC_DAILY_ORIGINALS_V1','data_date':date.isoformat(),'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'github_run_id':os.environ.get('GITHUB_RUN_ID'),'commit':os.environ.get('GITHUB_SHA'),'event':event,'mode':'HISTORICAL_INTEGRATION_SMOKE' if event=='push' else 'DAILY_PUBLIC_RETRIEVAL','scope':'PUBLIC_SOURCES_ONLY_NO_PORTFOLIO_NO_FORECAST_NO_OOS','status':'MARKET_BYTES_READY' if ok==3 else 'PARTIAL_OR_NO_DATA_NOT_ASSUMED_HOLIDAY','sources':results}
+              calendar_ok=next(x['result']['status']=='CALENDAR_RAW_SAVED_NOT_SESSION_INDEX' for x in results if x['key']=='calendar')
+              ready=ok==3 and calendar_ok
+              manifest={'schema':'PUBLIC_DAILY_ORIGINALS_V1','data_date':date.isoformat(),'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'github_run_id':os.environ.get('GITHUB_RUN_ID'),'commit':os.environ.get('GITHUB_SHA'),'event':event,'mode':'HISTORICAL_INTEGRATION_SMOKE' if event=='push' else 'DAILY_PUBLIC_RETRIEVAL','scope':'PUBLIC_SOURCES_ONLY_NO_PORTFOLIO_NO_FORECAST_NO_OOS','status':'MARKET_BYTES_READY' if ready else 'PARTIAL_OR_NO_DATA_NOT_ASSUMED_HOLIDAY','sources':results}
               (root/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
               print(json.dumps(manifest,ensure_ascii=False,indent=2))
-              return 0 if ok==3 else 2
+              return 0 if ready else 2
           if __name__=='__main__': sys.exit(main())
           PYCODE
       - name: Preserve originals, validation and failures
