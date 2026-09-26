@@ -1,0 +1,50 @@
+name: issuer-followup-20260926
+on:
+  push:
+    branches: [data-recovery/public-raw-20260926]
+    paths: [.github/workflows/issuer_followup_20260926.yml]
+permissions:
+  contents: read
+jobs:
+  public-fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch discovered issuer document and public IR entry pages
+        shell: bash
+        run: |
+          mkdir -p issuer-raw
+          python3 - <<'PY'
+          import concurrent.futures, datetime, hashlib, json, os, pathlib, urllib.request, urllib.error
+          root=pathlib.Path('issuer-raw')
+          urls={
+          'airoha_q2_2026.pdf':'https://www.airoha.com/files/uploads/Airoha/Presentations/InvestmentForum/%E9%81%94%E7%99%BC%E7%A7%91%E6%8A%802026Q2%E6%B3%95%E4%BA%BA%E8%AA%AA%E6%98%8E%E6%9C%83_%E4%B8%8A%E5%82%B3%E7%89%88_%E8%8B%B1%E6%96%87.pdf',
+          'kinsus_entry.html':'https://www.kinsus.com.tw/',
+          'accton_entry.html':'https://www.accton.com/',
+          'avc_entry.html':'https://www.avc.co/'
+          }
+          def get(pair):
+              name,url=pair
+              rec={'name':name,'requested_url':url,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'classification':'UNVALIDATED_RESPONSE'}
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (public research)'})
+                  try:r=urllib.request.urlopen(req,timeout=30)
+                  except urllib.error.HTTPError as e:r=e
+                  with r:
+                      b=r.read(20000001)
+                      if len(b)>20000000:raise ValueError('oversize')
+                      (root/name).write_bytes(b)
+                      rec.update(status=r.status,final_url=r.geturl(),content_type=r.headers.get('Content-Type',''),bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:rec.update(error=type(e).__name__+': '+str(e),classification='TRANSPORT_FAILED')
+              return rec
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool: records=list(pool.map(get,urls.items()))
+          (root/'retrieval_manifest.json').write_text(json.dumps({'github_run_id':os.environ.get('GITHUB_RUN_ID'),'scope':'PUBLIC_SOURCES_NO_PORTFOLIO_DATA','sources':records},ensure_ascii=False,indent=2))
+          print(json.dumps(records,ensure_ascii=False,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issuer-raw-20260926-${{ github.run_id }}
+          path: issuer-raw/
+          if-no-files-found: error
+          retention-days: 30
