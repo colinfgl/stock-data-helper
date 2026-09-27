@@ -1,0 +1,35 @@
+name: Public exact Q2 and index 20260927
+on:
+  push:
+    branches: [data-recovery/public-market-20260927]
+    paths: [.github/workflows/public_q2_index_exact_20260927.yml]
+permissions:
+  contents: read
+jobs:
+  fetch-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fetch exact public files
+        run: |
+          mkdir -p exact
+          python3 - <<'PY'
+          import urllib.request,json,hashlib,pathlib,datetime,concurrent.futures
+          root=pathlib.Path('exact')
+          jobs=[('avc_2026Q2.pdf','https://www.avc.co/Portals/0/FileUpload/Financial/Financial-Rep/2026/2026Q2Financialreport.pdf'),('taiex.json','https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?response=json&date=20260924'),('index_page.html','https://www.twse.com.tw/zh/indices/taiex/mi-5min-hist.html')]
+          def fetch(job):
+              n,u=job;r={'path':n,'url':u,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=40) as f:b=f.read();r.update(http_status=f.status,final_url=f.url,content_type=f.headers.get('Content-Type'))
+                  (root/n).write_bytes(b);r.update(bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:r['error']=str(e)
+              return r
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex: records=list(ex.map(fetch,jobs))
+          (root/'manifest.json').write_text(json.dumps({'records':records},ensure_ascii=False,indent=2));print(json.dumps(records))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-q2-index-exact-20260927
+          path: exact
+          retention-days: 30
