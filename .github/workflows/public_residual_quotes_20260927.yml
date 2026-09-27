@@ -1,0 +1,35 @@
+name: Public residual quotes 20260927
+on:
+  push:
+    branches: [data-recovery/public-market-20260927]
+    paths: [.github/workflows/public_residual_quotes_20260927.yml]
+permissions:
+  contents: read
+jobs:
+  public-quotes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Preserve public responses
+        run: |
+          mkdir -p public
+          python3 - <<'PY'
+          import urllib.request,json,hashlib,pathlib,datetime,concurrent.futures
+          root=pathlib.Path('public')
+          jobs=[('tpex_20260923.json','https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026/09/23&id=&response=json','TPEX_DAILY_QUOTES_JSON'),('twse_3718_202609.json','https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=20260901&stockNo=3718','TWSE_STOCK_DAY_JSON'),('twse_6806_202609.json','https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=20260901&stockNo=6806','TWSE_STOCK_DAY_JSON')]
+          def fetch(job):
+              n,u,fmt=job;r={'path':n,'url':u,'format':fmt,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=40) as f:b=f.read();r.update(http_status=f.status,final_url=f.url,headers=dict(f.headers))
+                  (root/n).write_bytes(b);r.update(bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:r['error']=str(e)
+              return r
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:records=list(ex.map(fetch,jobs))
+          (root/'manifest.json').write_text(json.dumps({'records':records},ensure_ascii=False,indent=2));print(json.dumps(records))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-residual-quotes-20260927
+          path: public
+          retention-days: 30
