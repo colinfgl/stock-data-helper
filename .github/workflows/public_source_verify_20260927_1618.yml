@@ -1,0 +1,37 @@
+name: Public source verification 20260927
+on:
+  push:
+    branches: [data-recovery/public-market-20260927]
+    paths: [.github/workflows/public_source_verify_20260927_1618.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Preserve public original responses
+        run: |
+          mkdir -p originals
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,hashlib,pathlib,datetime,concurrent.futures
+          root=pathlib.Path('originals')
+          jobs=[('delisted.html','https://www.twse.com.tw/company/suspendListingCsvAndHtml?lang=en&type=html'),('calendar.json','https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear=115'),('index_old.json','https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date=20260924&response=json'),('index_canonical.json','https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?response=json&date=20260924'),('accton_reports.html','https://www.accton.com/tw/annual/'),('accton_q2_index.html','https://www.accton.com/financial-reports/')]
+          def fetch(j):
+              n,u=j;r={'path':n,'url':u,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              try:
+                  q=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0','Accept':'*/*'})
+                  with urllib.request.urlopen(q,timeout=30) as f:
+                      b=f.read(10000000);r.update(http_status=f.status,final_url=f.url,content_type=f.headers.get('Content-Type'))
+                  (root/n).write_bytes(b);r.update(bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:r['error']=str(e)
+              return r
+          with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:r=list(ex.map(fetch,jobs))
+          (root/'manifest.json').write_text(json.dumps({'scope':'PUBLIC_ORIGINALS_ONLY','records':r},ensure_ascii=False,indent=2));print(json.dumps(r,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-source-verification-20260927
+          path: originals
+          retention-days: 90
