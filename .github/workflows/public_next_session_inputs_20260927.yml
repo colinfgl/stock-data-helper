@@ -1,0 +1,33 @@
+name: Public next-session inputs 20260927
+on:
+  push:
+    branches: [data-recovery/public-market-20260927]
+    paths: [.github/workflows/public_next_session_inputs_20260927.yml]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6e6ba2b80dbbca9718e9ac4c67d4fd0faf641d55
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect original next-session public sources
+        run: |
+          mkdir -p empty_seed
+          python scripts/premarket_daily_cached.py --seed empty_seed --out public_daily --symbols-file config/premarket_public_symbols.json --target-date auto
+      - name: Preserve exact public sources and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-session-public-inputs-20260927
+          path: |
+            public_daily
+            scripts/premarket_daily_cached.py
+            scripts/premarket_daily_inputs.py
+            config/premarket_public_symbols.json
+          retention-days: 90
