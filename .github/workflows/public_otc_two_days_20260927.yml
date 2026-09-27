@@ -1,0 +1,34 @@
+name: Public OTC two days 20260927
+on:
+  push:
+    branches: [data-recovery/public-market-20260927]
+    paths: [.github/workflows/public_otc_two_days_20260927.yml]
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Preserve public source bytes
+        run: |
+          mkdir -p public
+          python3 - <<'PY'
+          import urllib.request,json,hashlib,pathlib,datetime,concurrent.futures
+          root=pathlib.Path('public')
+          def fetch(d):
+              u='https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date=2026/09/'+d+'&id=&response=json'; n='tpex_202609'+d+'.json';r={'path':n,'url':u,'format':'TPEX_DAILY_QUOTES_JSON','retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=40) as f:b=f.read();r.update(http_status=f.status,final_url=f.url,headers=dict(f.headers))
+                  (root/n).write_bytes(b);r.update(bytes=len(b),sha256=hashlib.sha256(b).hexdigest())
+              except Exception as e:r['error']=str(e)
+              return r
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:records=list(ex.map(fetch,['21','22']))
+          (root/'manifest.json').write_text(json.dumps({'records':records},ensure_ascii=False,indent=2));print(json.dumps(records))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-otc-two-days-20260927
+          path: public
+          retention-days: 30
