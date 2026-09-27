@@ -10,26 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Retrieve exact official report locator
+      - name: Submit observed official download form and preserve response
         shell: bash
         run: |
           python3 - <<'PY'
-          import urllib.request,json,pathlib,hashlib,datetime
-          root=pathlib.Path('accton-official');root.mkdir()
-          url='https://doc.twse.com.tw/server-java/t57sb01?step=1&colorchg=1&co_id=2345&year=115&mtype=A'
-          r={'url':url,'retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
-          try:
-              with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'}),timeout=35) as p:
+          import urllib.request,urllib.parse,json,pathlib,hashlib,datetime,re,html,http.cookiejar
+          root=pathlib.Path('accton-q2');root.mkdir();rows=[]
+          op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+          url='https://doc.twse.com.tw/server-java/t57sb01'
+          data=urllib.parse.urlencode({'colorchg':'1','step':'9','kind':'A','co_id':'2345','filename':'202602_2345_AI1.pdf','DEBUG':''}).encode()
+          def get(url,key,data=None):
+              r={'url':url,'request_method':'POST' if data else 'GET','retrieved_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              if data:r['form']=data.decode()
+              with op.open(urllib.request.Request(url,data=data,headers={'User-Agent':'Mozilla/5.0','Referer':'https://doc.twse.com.tw/server-java/t57sb01'}),timeout=35) as p:
                   raw=p.read(20000001);r.update(http_status=p.status,final_url=p.geturl(),content_type=p.headers.get('Content-Type'))
               if len(raw)>20000000:raise ValueError('OVERSIZE')
-              (root/'listing.html').write_bytes(raw);r.update(path='listing.html',sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),status='SAVED_UNREVIEWED')
-              print(raw.decode('utf-8',errors='replace')[:15000])
-          except Exception as e:r.update(status='ERROR',error=repr(e))
-          (root/'manifest.json').write_text(json.dumps(r,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(r,ensure_ascii=False))
+              ext='.pdf' if raw.startswith(b'%PDF') else '.html';path=key+ext;(root/path).write_bytes(raw);r.update(path=path,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest());rows.append(r);return raw,r
+          try:
+              raw,meta=get(url,'download_response',data)
+              if not raw.startswith(b'%PDF'):
+                  text=raw.decode('big5',errors='replace');print(text[:15000])
+                  links=[urllib.parse.urljoin(meta['final_url'],html.unescape(x)) for x in re.findall(r'''href\s*=\s*[\"']([^\"']+)[\"']''',text,re.I)]
+                  matches=[x for x in links if urllib.parse.urlparse(x).hostname=='doc.twse.com.tw' and '202602_2345_AI1.pdf' in x]
+                  if len(set(matches))!=1:raise ValueError('EXACT_PDF_LINK_NOT_UNIQUE:'+repr(matches))
+                  get(matches[0],'accton_2026Q2')
+          except Exception as e:rows.append({'status':'ERROR','error':repr(e)})
+          (root/'manifest.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(rows,ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: accton-official-locator-20260927-2017
-          path: accton-official/
+          name: accton-official-q2-20260927-2024
+          path: accton-q2/
           retention-days: 90
