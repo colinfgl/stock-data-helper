@@ -265,7 +265,8 @@ def coverage(rows: List[dict], symbol: str) -> dict:
         "first": x[0]["date"] if x else None,
         "last": x[-1]["date"] if x else None,
         "sequence_60_ready": len(x) >= 60,
-        "wf_min_raw_rows": 730,\n        "wf_first_fold_ready": len(x) >= 730,
+        "wf_min_raw_rows": 730,
+        "wf_first_fold_ready": len(x) >= 730,
     }
 
 
@@ -285,7 +286,8 @@ def main():
     cov = [coverage(taiex, "TAIEX")]
     cov.extend(coverage(stocks, code) for code in SYMBOLS)
     payload = {
-        "status": "PASS" if all(x["sequence_60_ready"] for x in cov) else "PARTIAL",\n        "wf_status": "READY" if all(x["wf_first_fold_ready"] for x in cov) else "INSUFFICIENT_RAW_HISTORY",
+        "status": "PASS" if all(x["sequence_60_ready"] for x in cov) else "PARTIAL",
+        "wf_status": "READY" if all(x["wf_first_fold_ready"] for x in cov) else "INSUFFICIENT_RAW_HISTORY",
         "range": {"start": START_DATE, "end": MAX_DATE},
         "source_policy": "official TWSE after-close; premarket uses date < trade_date",
         "formal_weight": 0,
