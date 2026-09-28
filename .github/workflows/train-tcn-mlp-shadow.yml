@@ -2,12 +2,6 @@ name: train-tcn-mlp-shadow
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'output/shadow_feature_store/pit_matrix.csv'
-      - 'scripts/train_tcn_mlp_shadow.py'
-      - '.github/workflows/train-tcn-mlp-shadow.yml'
 
 permissions:
   contents: write
