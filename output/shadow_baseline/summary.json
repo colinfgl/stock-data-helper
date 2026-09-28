@@ -1,6 +1,8 @@
 {
   "status": "PASS_SHADOW_BASELINE",
   "seed": 20260928,
+  "lookback_calendar_alignment": 60,
+  "calendar_contract": "MATCH_TCN_SEQUENCE_ENDPOINTS",
   "split": {
     "train": 504,
     "validation": 126,
@@ -18,18 +20,17 @@
     "mkt_ret5",
     "mkt_vol20"
   ],
-  "folds": 50,
+  "folds": 36,
   "symbols": [
     "2345",
     "3017",
     "3189",
-    "3443",
-    "6526"
+    "3443"
   ],
-  "mean_direction_accuracy": 0.34800000000000003,
-  "mean_brier": 0.7264040248143124,
-  "mean_log_loss": 1.1989907839575151,
-  "mean_mae_return": 0.03578719577582931,
+  "mean_direction_accuracy": 0.3347222222222222,
+  "mean_brier": 0.7432192210279612,
+  "mean_log_loss": 1.2241915053596584,
+  "mean_mae_return": 0.03826747100039036,
   "feature_store_sha256": "26818be311cbe664089688464fbe01ec0959abca1060c5b95ca42d5a73fce0a5",
   "production": "NO_INTERACTION",
   "auto_promotion": false

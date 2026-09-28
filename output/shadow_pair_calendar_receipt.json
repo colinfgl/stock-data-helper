@@ -1,0 +1,23 @@
+{
+  "status": "PASS_PAIR_CALENDAR",
+  "baseline_rows": 36,
+  "nn_rows": 36,
+  "baseline_symbols": [
+    "2345",
+    "3017",
+    "3189",
+    "3443"
+  ],
+  "nn_symbols": [
+    "2345",
+    "3017",
+    "3189",
+    "3443"
+  ],
+  "only_baseline_keys": [],
+  "only_nn_keys": [],
+  "date_mismatch_count": 0,
+  "date_mismatches": [],
+  "production": "NO_INTERACTION",
+  "auto_promotion": false
+}
