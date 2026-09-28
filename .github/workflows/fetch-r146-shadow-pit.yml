@@ -1,0 +1,41 @@
+name: R146 Shadow PIT Backfill
+
+on:
+  push:
+    paths:
+      - "scripts/fetch_r146_shadow_pit.py"
+      - ".github/workflows/fetch-r146-shadow-pit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-r146-shadow-pit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch official TWSE PIT history
+        run: python scripts/fetch_r146_shadow_pit.py
+
+      - name: Show coverage
+        run: cat output/r146_shadow/coverage.json
+
+      - name: Commit generated PIT data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/r146_shadow/
+          if git diff --cached --quiet; then
+            echo "No data changes"
+          else
+            git commit -m "Update R146 official PIT shadow dataset"
+            git push
+          fi
