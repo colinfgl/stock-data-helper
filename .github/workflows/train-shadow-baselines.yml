@@ -2,13 +2,6 @@ name: train-shadow-baselines
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'output/a_plus_daily/a_plus_2023_2026_official.csv'
-      - 'output/taiex_2023_2026_official.csv'
-      - 'scripts/train_shadow_baselines.py'
-      - '.github/workflows/train-shadow-baselines.yml'
 
 permissions:
   contents: write
