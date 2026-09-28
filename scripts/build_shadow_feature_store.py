@@ -10,8 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-IN_STOCK=Path("output/a_plus_daily/a_plus_2023_2026_official.csv")
-IN_MKT=Path("output/taiex_2023_2026_official.csv")
+IN_STOCK=Path("output/r146_shadow/stocks_daily.csv")
+IN_MKT=Path("output/r146_shadow/taiex_daily.csv")
 OUT=Path("output/shadow_feature_store")
 FEATURES=["ret1","ret5","vol20","volume_z20","mkt_ret1","mkt_ret5","mkt_vol20"]
 
@@ -56,8 +56,8 @@ def main():
         }
         all_rows.append(g)
     x=pd.concat(all_rows,ignore_index=True).sort_values(["date","symbol"])
-    cols=["date","symbol","name","cutoff_date","open","high","low","close","volume","turnover_value"]+FEATURES+[
-        "missing_mask","target_ret1","target_available_date","source","source_url","pit_available_date"
+    cols=["date","symbol","name","cutoff_date","open","high","low","close","volume","amount"]+FEATURES+[
+        "missing_mask","target_ret1","target_available_date","source","source_url","available_from"
     ]
     x=x[cols]
     OUT.mkdir(parents=True,exist_ok=True)
