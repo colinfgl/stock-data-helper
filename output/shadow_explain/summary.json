@@ -1,0 +1,19 @@
+{
+  "status": "PASS_SHADOW_EXPLAINABILITY",
+  "method": "Integrated Gradients",
+  "steps": 16,
+  "baseline": "train-only median in scaled feature space",
+  "features": [
+    "ret1",
+    "ret5",
+    "vol20",
+    "volume_z20",
+    "mkt_ret1",
+    "mkt_ret5",
+    "mkt_vol20"
+  ],
+  "folds_explained": 36,
+  "samples_explained": 720,
+  "production": "NO_INTERACTION",
+  "causal_claim": false
+}
