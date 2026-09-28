@@ -2,13 +2,6 @@ name: build-shadow-feature-store
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'output/a_plus_daily/a_plus_2023_2026_official.csv'
-      - 'output/taiex_2023_2026_official.csv'
-      - 'scripts/build_shadow_feature_store.py'
-      - '.github/workflows/build-shadow-feature-store.yml'
 
 permissions:
   contents: write
