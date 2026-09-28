@@ -55,7 +55,7 @@
   },
   "stock_input_sha256": "dc09d5f81cd69afb5abfe76b956b89a127fc842c2480953d53a384b91e8e435c",
   "market_input_sha256": "645ca1a51a881a275580d0ec3b0f6be7ddf6dd53b347ef6cb64f962cd3dbc96a",
-  "matrix_sha256": "b04af3695e2b1aa742f82b9109aafc7c8f2a7f9fd39a47d547fd4e3147e5e06b",
+  "matrix_sha256": "26818be311cbe664089688464fbe01ec0959abca1060c5b95ca42d5a73fce0a5",
   "pit_rule": "all features from row date/cutoff or earlier; target isolated",
   "production": "NO_INTERACTION"
 }

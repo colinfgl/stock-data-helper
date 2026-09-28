@@ -28,9 +28,9 @@
   ],
   "mean_direction_accuracy": 0.34800000000000003,
   "mean_brier": 0.7264040248143124,
-  "mean_log_loss": 1.198990783957515,
+  "mean_log_loss": 1.1989907839575151,
   "mean_mae_return": 0.03578719577582931,
-  "feature_store_sha256": "b04af3695e2b1aa742f82b9109aafc7c8f2a7f9fd39a47d547fd4e3147e5e06b",
+  "feature_store_sha256": "26818be311cbe664089688464fbe01ec0959abca1060c5b95ca42d5a73fce0a5",
   "production": "NO_INTERACTION",
   "auto_promotion": false
 }

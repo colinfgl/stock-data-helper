@@ -6,31 +6,36 @@
       "rows": 901,
       "first": "2023-01-03",
       "last": "2026-09-24",
-      "last_close": 8525.0
+      "last_close": 8525.0,
+      "missing_months": []
     },
     "6526": {
       "rows": 714,
       "first": "2023-10-19",
       "last": "2026-09-24",
-      "last_close": 840.0
+      "last_close": 840.0,
+      "missing_months": []
     },
     "3189": {
       "rows": 901,
       "first": "2023-01-03",
       "last": "2026-09-24",
-      "last_close": 962.0
+      "last_close": 962.0,
+      "missing_months": []
     },
     "2345": {
       "rows": 901,
       "first": "2023-01-03",
       "last": "2026-09-24",
-      "last_close": 1895.0
+      "last_close": 1895.0,
+      "missing_months": []
     },
     "3017": {
       "rows": 901,
       "first": "2023-01-03",
       "last": "2026-09-24",
-      "last_close": 3555.0
+      "last_close": 3555.0,
+      "missing_months": []
     }
   },
   "rows_all": 4318,

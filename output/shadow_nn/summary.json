@@ -9,7 +9,7 @@
     "test": 20,
     "step": 20
   },
-  "feature_store_sha256": "b04af3695e2b1aa742f82b9109aafc7c8f2a7f9fd39a47d547fd4e3147e5e06b",
+  "feature_store_sha256": "26818be311cbe664089688464fbe01ec0959abca1060c5b95ca42d5a73fce0a5",
   "features": [
     "ret1",
     "ret5",
@@ -29,9 +29,9 @@
   ],
   "mean_coverage": 0.24583333333333332,
   "mean_direction_accuracy": 0.24695805986128566,
-  "mean_brier": 0.6796187431779787,
-  "mean_log_loss": 1.1171751906794887,
-  "mean_mae_return": 0.06196535353499337,
+  "mean_brier": 0.6796187455248072,
+  "mean_log_loss": 1.1171751868340276,
+  "mean_mae_return": 0.06196535418619087,
   "production": "NO_INTERACTION",
   "auto_promotion": false
 }
