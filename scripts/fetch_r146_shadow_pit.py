@@ -24,7 +24,7 @@ Outputs
 - output/r146_shadow/coverage.json
 - output/r146_shadow/manifest.sha256
 
-This script writes research/shadow data only. It MUST NOT change production weights,
+This script writes research/shadow data only. Push-trigger v1.1. It MUST NOT change production weights,
 holdings, cash, trades, or Formal OOS state.
 """
 from __future__ import annotations
@@ -48,7 +48,7 @@ SYMBOLS: Dict[str, str] = {
     "3017": "奇鋐",
 }
 OUT_DIR = Path("output/r146_shadow")
-UA = "stock-data-helper r146-shadow-pit/1.0"
+UA = "stock-data-helper r146-shadow-pit/1.1"
 
 
 def get_json(url: str, retries: int = 5):
