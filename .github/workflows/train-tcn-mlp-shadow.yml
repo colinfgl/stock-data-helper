@@ -1,0 +1,37 @@
+name: train-tcn-mlp-shadow
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'output/shadow_feature_store/pit_matrix.csv'
+      - 'scripts/train_tcn_mlp_shadow.py'
+      - '.github/workflows/train-tcn-mlp-shadow.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install neural shadow dependencies
+        run: pip install numpy pandas scikit-learn torch
+      - name: Train TCN+MLP neural shadow
+        run: python scripts/train_tcn_mlp_shadow.py
+      - name: Commit neural shadow receipts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/shadow_nn/
+          if git diff --cached --quiet; then
+            echo "No neural shadow output changes"
+          else
+            git commit -m "Update TCN+MLP neural shadow metrics"
+            git push
+          fi
