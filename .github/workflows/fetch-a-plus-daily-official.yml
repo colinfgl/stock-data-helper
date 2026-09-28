@@ -58,5 +58,6 @@ jobs:
             echo "No pipeline output changes"
           else
             git commit -m "Update official A+ PIT and shadow model pipeline"
+            git pull --rebase origin main
             git push
           fi
