@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R147 simple shadow baselines: multinomial logistic + Ridge.
+"""R147 simple shadow baselines: multinomial logistic + Ridge.\n\n# R147 paired-calendar orchestrator trigger
 
 Consumes only the canonical PIT feature-store matrix.
 Strict time split, no shuffle, train-only scaling and label calibration.
