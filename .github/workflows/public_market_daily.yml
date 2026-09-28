@@ -213,16 +213,15 @@ jobs:
               event = os.environ.get('GITHUB_EVENT_NAME', 'manual')
               requested = os.environ.get('REQUESTED_DATE', '').strip()
 
-              # Push is explicitly historical integration smoke, never current market data.
-              if not requested and event == 'push':
-                  requested = '2026-09-24'
-
+              # Explicit manual dates stay exact. Push/schedule without a date exercise
+              # the same latest-completed resolver; scope remains public-data-only and
+              # never writes portfolio, forecast, Outcome or OOS state.
               if requested:
                   exact = dt.date.fromisoformat(requested)
                   if exact > today:
                       raise ValueError('FUTURE_DATE_FORBIDDEN')
                   candidates = [exact]
-                  mode = 'EXPLICIT_DATE' if event != 'push' else 'HISTORICAL_INTEGRATION_SMOKE'
+                  mode = 'EXPLICIT_DATE'
               else:
                   # Scheduled runs must resolve the latest *completed* trading data.
                   # Before the Taiwan close, start from yesterday. After close, today's
@@ -235,7 +234,7 @@ jobs:
                       if d.weekday() < 5:
                           candidates.append(d)
                       d -= dt.timedelta(days=1)
-                  mode = 'LATEST_COMPLETED_TRADING_DATE'
+                  mode = 'LATEST_COMPLETED_INTEGRATION_SMOKE' if event == 'push' else 'LATEST_COMPLETED_TRADING_DATE'
 
               attempts = []
               selected = None
