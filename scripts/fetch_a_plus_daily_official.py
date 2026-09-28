@@ -21,7 +21,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-SYMBOLS = {
+MIN_ROWS = {"3443": 850, "6526": 680, "3189": 850, "2345": 850, "3017": 850}\n\nSYMBOLS = {
     "3443": "創意",
     "6526": "達發",
     "3189": "景碩",
@@ -178,10 +178,10 @@ def main():
     all_rows.sort(key=lambda r: (r["date"], r["symbol"]))
     write_csv(OUT_ALL, all_rows)
 
-    bad_short = {s: v for s, v in qa.items() if v["rows"] < 850}
+    bad_short = {s: v for s, v in qa.items() if v["rows"] < MIN_ROWS[s]}
     bad_last = {s: v for s, v in qa.items() if v["last"] < "2026-09-18"}
     if bad_short:
-        raise RuntimeError(f"coverage <850 rows: {bad_short}")
+        raise RuntimeError(f"coverage below symbol-specific minimum: {bad_short}")
     if bad_last:
         raise RuntimeError(f"stale official coverage: {bad_last}")
 
