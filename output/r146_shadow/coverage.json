@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "range": {
+    "start": "2024-01-01",
+    "end": "2026-09-24"
+  },
+  "source_policy": "official TWSE after-close; premarket uses date < trade_date",
+  "formal_weight": 0,
+  "production_effect": "NONE",
+  "coverage": [
+    {
+      "symbol": "TAIEX",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    },
+    {
+      "symbol": "3443",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    },
+    {
+      "symbol": "6526",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    },
+    {
+      "symbol": "3189",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    },
+    {
+      "symbol": "2345",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    },
+    {
+      "symbol": "3017",
+      "rows": 662,
+      "first": "2024-01-02",
+      "last": "2026-09-24",
+      "sequence_60_ready": true,
+      "wf_660_ready": true
+    }
+  ]
+}
