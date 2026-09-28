@@ -1,4 +1,4 @@
-name: fetch-taiex-2024-2026-official
+name: fetch-taiex-2023-2026-official
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/taiex_2024_2026_official.csv output/taiex_2024_2026_qa.json
+          git add output/taiex_2023_2026_official.csv output/taiex_2023_2026_qa.json
           if git diff --cached --quiet; then
             echo "No output changes"
           else
