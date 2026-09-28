@@ -1,0 +1,38 @@
+name: train-shadow-baselines
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'output/a_plus_daily/a_plus_2023_2026_official.csv'
+      - 'output/taiex_2023_2026_official.csv'
+      - 'scripts/train_shadow_baselines.py'
+      - '.github/workflows/train-shadow-baselines.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install baseline dependencies
+        run: pip install numpy pandas scikit-learn
+      - name: Train purged walk-forward shadow baselines
+        run: python scripts/train_shadow_baselines.py
+      - name: Commit shadow baseline receipts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/shadow_baseline/
+          if git diff --cached --quiet; then
+            echo "No baseline output changes"
+          else
+            git commit -m "Update purged walk-forward shadow baseline metrics"
+            git push
+          fi
