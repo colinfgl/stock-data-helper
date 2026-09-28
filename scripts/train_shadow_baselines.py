@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""R147 simple shadow baselines: multinomial logistic + Ridge.\n\n# R147 paired-calendar orchestrator trigger
+"""R147 simple shadow baselines: multinomial logistic + Ridge.
 
 Consumes only the canonical PIT feature-store matrix.
 Strict time split, no shuffle, train-only scaling and label calibration.
+The fold calendar is intentionally aligned to the neural challenger's 60-day
+sequence endpoint calendar so paired comparisons use identical symbol/date folds.
 Shadow only: never writes Production weights/trades/cash.
 """
 from __future__ import annotations
@@ -18,6 +20,7 @@ from sklearn.metrics import accuracy_score, log_loss, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 
 SEED = 20260928
+LOOKBACK = 60
 TRAIN = 504
 VAL = 126
 PURGE = 10
@@ -72,6 +75,17 @@ def main():
 
     for sym, g in data.groupby("symbol"):
         g = g.reset_index(drop=True)
+
+        # Calendar parity contract:
+        # train_tcn_mlp_shadow.py emits one sample for each 60-day sequence
+        # endpoint, so its first eligible endpoint is raw row LOOKBACK-1.
+        # The tabular baseline uses only the endpoint features, but must start
+        # from the same endpoint calendar. This also makes short-history symbols
+        # ineligible in both challengers under the same fold rule.
+        if len(g) < LOOKBACK:
+            continue
+        g = g.iloc[LOOKBACK - 1 :].reset_index(drop=True)
+
         start = 0
         fold_no = 0
 
@@ -155,6 +169,8 @@ def main():
     summary = {
         "status": "PASS_SHADOW_BASELINE",
         "seed": SEED,
+        "lookback_calendar_alignment": LOOKBACK,
+        "calendar_contract": "MATCH_TCN_SEQUENCE_ENDPOINTS",
         "split": {
             "train": TRAIN,
             "validation": VAL,
