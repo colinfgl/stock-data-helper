@@ -10,52 +10,52 @@
     "mkt_ret5",
     "mkt_vol20"
   ],
-  "row_count": 3310,
+  "row_count": 4318,
   "symbols": {
     "2345": {
-      "raw_rows": 662,
-      "usable_rows": 641,
-      "first": "2024-01-02",
+      "raw_rows": 901,
+      "usable_rows": 880,
+      "first": "2023-01-03",
       "last": "2026-09-24",
-      "usable_first": "2024-01-30",
+      "usable_first": "2023-02-10",
       "usable_last": "2026-09-23"
     },
     "3017": {
-      "raw_rows": 662,
-      "usable_rows": 641,
-      "first": "2024-01-02",
+      "raw_rows": 901,
+      "usable_rows": 880,
+      "first": "2023-01-03",
       "last": "2026-09-24",
-      "usable_first": "2024-01-30",
+      "usable_first": "2023-02-10",
       "usable_last": "2026-09-23"
     },
     "3189": {
-      "raw_rows": 662,
-      "usable_rows": 641,
-      "first": "2024-01-02",
+      "raw_rows": 901,
+      "usable_rows": 880,
+      "first": "2023-01-03",
       "last": "2026-09-24",
-      "usable_first": "2024-01-30",
+      "usable_first": "2023-02-10",
       "usable_last": "2026-09-23"
     },
     "3443": {
-      "raw_rows": 662,
-      "usable_rows": 641,
-      "first": "2024-01-02",
+      "raw_rows": 901,
+      "usable_rows": 880,
+      "first": "2023-01-03",
       "last": "2026-09-24",
-      "usable_first": "2024-01-30",
+      "usable_first": "2023-02-10",
       "usable_last": "2026-09-23"
     },
     "6526": {
-      "raw_rows": 662,
-      "usable_rows": 641,
-      "first": "2024-01-02",
+      "raw_rows": 714,
+      "usable_rows": 693,
+      "first": "2023-10-19",
       "last": "2026-09-24",
-      "usable_first": "2024-01-30",
+      "usable_first": "2023-11-16",
       "usable_last": "2026-09-23"
     }
   },
-  "stock_input_sha256": "3941ee80bb70d4a78f03d61981be488640a5d3271bac15adc0344163d520000a",
-  "market_input_sha256": "58b154140e267d68ece23f1e7e9dbe10b104b208a3192ca6791eb332c1c9fa44",
-  "matrix_sha256": "e54b6c14dc4a673dac48861b304bc620586221901b1b3c2d57f2c8ccd8671974",
+  "stock_input_sha256": "dc09d5f81cd69afb5abfe76b956b89a127fc842c2480953d53a384b91e8e435c",
+  "market_input_sha256": "645ca1a51a881a275580d0ec3b0f6be7ddf6dd53b347ef6cb64f962cd3dbc96a",
+  "matrix_sha256": "26818be311cbe664089688464fbe01ec0959abca1060c5b95ca42d5a73fce0a5",
   "pit_rule": "all features from row date/cutoff or earlier; target isolated",
   "production": "NO_INTERACTION"
 }
