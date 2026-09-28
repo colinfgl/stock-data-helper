@@ -28,11 +28,11 @@ SYMBOLS = {
     "2345": "智邦",
     "3017": "奇鋐",
 }
-START_YEAR, START_MONTH = 2024, 1
+START_YEAR, START_MONTH = 2023, 1
 END_YEAR, END_MONTH = 2026, 9
 MAX_DATE = "2026-09-24"
 OUT_DIR = Path("output/a_plus_daily")
-OUT_ALL = OUT_DIR / "a_plus_2024_2026_official.csv"
+OUT_ALL = OUT_DIR / "a_plus_2023_2026_official.csv"
 UA = "stock-data-helper a-plus-pit-sequence/1.0"
 
 
@@ -178,10 +178,10 @@ def main():
     all_rows.sort(key=lambda r: (r["date"], r["symbol"]))
     write_csv(OUT_ALL, all_rows)
 
-    bad_short = {s: v for s, v in qa.items() if v["rows"] < 600}
+    bad_short = {s: v for s, v in qa.items() if v["rows"] < 850}
     bad_last = {s: v for s, v in qa.items() if v["last"] < "2026-09-18"}
     if bad_short:
-        raise RuntimeError(f"coverage <600 rows: {bad_short}")
+        raise RuntimeError(f"coverage <850 rows: {bad_short}")
     if bad_last:
         raise RuntimeError(f"stale official coverage: {bad_last}")
 
