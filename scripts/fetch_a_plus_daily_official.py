@@ -30,6 +30,13 @@ SYMBOLS = {
     "2345": "智邦",
     "3017": "奇鋐",
 }
+LISTING_START = {
+    "3443": "2006-11-03",
+    "6526": "2023-10-19",
+    "3189": "2001-09-17",
+    "2345": "1996-07-03",
+    "3017": "2002-09-27",
+}
 START_YEAR, START_MONTH = 2023, 1
 END_YEAR, END_MONTH = 2026, 9
 MAX_DATE = "2026-09-24"
@@ -86,15 +93,34 @@ def fetch_symbol(symbol: str, name: str):
     rows = []
     for year, month in iter_months():
         datearg = f"{year:04d}{month:02d}01"
-        url = (
+        urls = [
             "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
-            f"?date={datearg}&stockNo={symbol}&response=json"
-        )
-        try:
-            payload = get_json(url, retries=4)
-        except Exception as e:
-            print(f"{symbol} {year}-{month:02d} fetch error: {e}", flush=True)
-            continue
+            f"?date={datearg}&stockNo={symbol}&response=json",
+            "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+            f"?response=json&date={datearg}&stockNo={symbol}",
+        ]
+        payload = None
+        url = None
+        errors = []
+        for candidate in urls:
+            try:
+                p = get_json(candidate, retries=4)
+                if p.get("data"):
+                    payload, url = p, candidate
+                    break
+                errors.append(f"{candidate}: no data")
+            except Exception as e:
+                errors.append(f"{candidate}: {e}")
+        month_key = f"{year:04d}-{month:02d}"
+        listing_month = LISTING_START[symbol][:7]
+        if payload is None:
+            if month_key < listing_month:
+                print(f"{symbol} {month_key} pre-listing no data", flush=True)
+                continue
+            raise RuntimeError(
+                f"{symbol} {month_key} official month missing after listing; "
+                + " | ".join(errors)
+            )
         data = payload.get("data") or []
         fields = [str(x) for x in payload.get("fields", [])]
         idx = {"date": 0, "volume": 1, "value": 2, "open": 3, "high": 4, "low": 5, "close": 6}
@@ -169,11 +195,21 @@ def main():
             raise RuntimeError(f"{symbol} no official STOCK_DAY rows")
         per = OUT_DIR / f"{symbol}_{START_YEAR}_{END_YEAR}_official.csv"
         write_csv(per, rows)
+        seen_months = sorted({r["date"][:7] for r in rows})
+        expected_months = []
+        for y, m in iter_months():
+            key = f"{y:04d}-{m:02d}"
+            if key >= LISTING_START[symbol][:7] and key <= MAX_DATE[:7]:
+                expected_months.append(key)
+        missing_months = [x for x in expected_months if x not in seen_months]
+        if missing_months:
+            raise RuntimeError(f"{symbol} missing listed months: {missing_months}")
         qa[symbol] = {
             "rows": len(rows),
             "first": rows[0]["date"],
             "last": rows[-1]["date"],
             "last_close": rows[-1]["close"],
+            "missing_months": missing_months,
         }
         all_rows.extend(rows)
 
