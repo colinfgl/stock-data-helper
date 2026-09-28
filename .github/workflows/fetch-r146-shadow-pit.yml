@@ -1,10 +1,6 @@
 name: R146 Shadow PIT Backfill
 
 on:
-  push:
-    paths:
-      - "scripts/fetch_r146_shadow_pit.py"
-      - ".github/workflows/fetch-r146-shadow-pit.yml"
   workflow_dispatch:
 
 permissions:
