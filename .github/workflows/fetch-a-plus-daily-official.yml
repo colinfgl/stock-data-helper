@@ -6,29 +6,49 @@ on:
     branches: [main]
     paths:
       - 'scripts/fetch_a_plus_daily_official.py'
+      - 'scripts/build_shadow_feature_store.py'
+      - 'scripts/train_shadow_baselines.py'
+      - 'scripts/train_tcn_mlp_shadow.py'
       - '.github/workflows/fetch-a-plus-daily-official.yml'
 
 permissions:
   contents: write
 
 jobs:
-  fetch:
+  pit-shadow-pipeline:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Fetch official A+ daily PIT data
         run: python scripts/fetch_a_plus_daily_official.py
-      - name: Commit outputs
+
+      - name: Install feature-store and baseline dependencies
+        run: pip install numpy pandas scikit-learn
+
+      - name: Build canonical PIT feature store
+        run: python scripts/build_shadow_feature_store.py
+
+      - name: Train purged walk-forward simple baselines
+        run: python scripts/train_shadow_baselines.py
+
+      - name: Install CPU PyTorch
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch
+
+      - name: Train TCN+MLP neural shadow
+        run: python scripts/train_tcn_mlp_shadow.py
+
+      - name: Commit PIT and shadow outputs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/a_plus_daily/
+          git add output/a_plus_daily/ output/shadow_feature_store/ output/shadow_baseline/ output/shadow_nn/
           if git diff --cached --quiet; then
-            echo "No output changes"
+            echo "No pipeline output changes"
           else
-            git commit -m "Update official A+ daily PIT data"
+            git commit -m "Update official A+ PIT and shadow model pipeline"
             git push
           fi
