@@ -1,0 +1,34 @@
+name: fetch-taiex-2024-2026-official
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/fetch_taiex_2024_2026_official.py'
+      - '.github/workflows/fetch-taiex-2024-2026-official.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch official TAIEX PIT history
+        run: python scripts/fetch_taiex_2024_2026_official.py
+      - name: Commit outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/taiex_2024_2026_official.csv output/taiex_2024_2026_qa.json
+          if git diff --cached --quiet; then
+            echo "No output changes"
+          else
+            git commit -m "Update 2024-2026 official TAIEX PIT data"
+            git push
+          fi
