@@ -1,0 +1,37 @@
+{
+  "status": "PASS_SHADOW_NN",
+  "architecture": "TCN32x2+MLP32->Fusion64",
+  "lookback": 60,
+  "split": {
+    "train": 504,
+    "validation": 126,
+    "purge": 10,
+    "test": 20,
+    "step": 20
+  },
+  "feature_store_sha256": "b04af3695e2b1aa742f82b9109aafc7c8f2a7f9fd39a47d547fd4e3147e5e06b",
+  "features": [
+    "ret1",
+    "ret5",
+    "vol20",
+    "volume_z20",
+    "mkt_ret1",
+    "mkt_ret5",
+    "mkt_vol20"
+  ],
+  "seed": 20260928,
+  "folds": 36,
+  "symbols": [
+    "2345",
+    "3017",
+    "3189",
+    "3443"
+  ],
+  "mean_coverage": 0.24583333333333332,
+  "mean_direction_accuracy": 0.24695805986128566,
+  "mean_brier": 0.6796187431779787,
+  "mean_log_loss": 1.1171751906794887,
+  "mean_mae_return": 0.06196535353499337,
+  "production": "NO_INTERACTION",
+  "auto_promotion": false
+}
