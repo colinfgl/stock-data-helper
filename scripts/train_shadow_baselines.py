@@ -46,6 +46,59 @@ def brier_multiclass(y_true, probs, classes):
     return float(np.mean(np.sum((probs-y)**2,axis=1)))
 
 def prep():
+    x=pd.read_csv(IN_MATRIX)
+    x["date"]=pd.to_datetime(x["date"])
+    x=x.dropna(subset=FEATURES+["target_ret1","vol20"]).sort_values(["symbol","date"])
+    x=x.rename(columns={"target_ret1":"fwd_ret1"})
+    return x
+#!/usr/bin/env python3
+"""R147 simple shadow baselines: multinomial logistic + Ridge.
+
+Inputs are official TWSE PIT CSVs produced by this repo.
+Strict time split, no shuffle, train-only scaling and label calibration.
+Shadow only: never writes Production weights/trades/cash.
+"""
+from __future__ import annotations
+import hashlib, json
+from pathlib import Path
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import log_loss, mean_absolute_error, accuracy_score
+
+SEED=20260928
+TRAIN=504
+VAL=126
+PURGE=10
+TEST=20
+STEP=20
+EPS=1e-12
+IN_STOCK=Path("output/a_plus_daily/a_plus_2023_2026_official.csv")
+IN_MKT=Path("output/taiex_2023_2026_official.csv")
+OUT=Path("output/shadow_baseline")
+FEATURES=["ret1","ret5","vol20","volume_z20","mkt_ret1","mkt_ret5","mkt_vol20"]
+
+def sha256_file(p):
+    h=hashlib.sha256()
+    with p.open("rb") as f:
+        for b in iter(lambda:f.read(1<<20),b""):h.update(b)
+    return h.hexdigest()
+
+def q333(x):
+    return float(np.quantile(np.asarray(x,dtype=float),1/3))
+
+def labels(ret,sigma,k):
+    thr=k*sigma
+    return np.where(ret>thr,"UP",np.where(ret<-thr,"DOWN","SIDE"))
+
+def brier_multiclass(y_true, probs, classes):
+    y=np.zeros_like(probs)
+    pos={c:i for i,c in enumerate(classes)}
+    for i,c in enumerate(y_true): y[i,pos[c]]=1
+    return float(np.mean(np.sum((probs-y)**2,axis=1)))
+
+def prep():
     s=pd.read_csv(IN_STOCK)
     m=pd.read_csv(IN_MKT)
     for df in (s,m): df["date"]=pd.to_datetime(df["date"])
@@ -129,7 +182,7 @@ def main():
       "mean_direction_accuracy":float(df.direction_accuracy.mean()),
       "mean_brier":float(df.brier.mean()),"mean_log_loss":float(df.log_loss.mean()),
       "mean_mae_return":float(df.mae_return.mean()),
-      "stock_input_sha256":sha256_file(IN_STOCK),"market_input_sha256":sha256_file(IN_MKT),
+      "feature_store_sha256":sha256_file(IN_MATRIX),
       "production":"NO_INTERACTION","auto_promotion":False
     }
     (OUT/"summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
