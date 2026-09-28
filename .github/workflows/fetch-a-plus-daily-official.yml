@@ -1,4 +1,4 @@
-name: fetch-a-plus-daily-official
+name: shadow-pit-model-pipeline
 
 on:
   workflow_dispatch:
@@ -6,10 +6,15 @@ on:
     branches: [main]
     paths:
       - 'scripts/fetch_a_plus_daily_official.py'
+      - 'scripts/fetch_taiex_2024_2026_official.py'
       - 'scripts/build_shadow_feature_store.py'
       - 'scripts/train_shadow_baselines.py'
       - 'scripts/train_tcn_mlp_shadow.py'
       - '.github/workflows/fetch-a-plus-daily-official.yml'
+
+concurrency:
+  group: shadow-pit-model-pipeline
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -25,6 +30,9 @@ jobs:
 
       - name: Fetch official A+ daily PIT data
         run: python scripts/fetch_a_plus_daily_official.py
+
+      - name: Fetch official TAIEX PIT history
+        run: python scripts/fetch_taiex_2024_2026_official.py
 
       - name: Install feature-store and baseline dependencies
         run: pip install numpy pandas scikit-learn
@@ -45,7 +53,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/a_plus_daily/ output/shadow_feature_store/ output/shadow_baseline/ output/shadow_nn/
+          git add output/a_plus_daily/ output/taiex_2023_2026_official.csv output/taiex_2023_2026_qa.json output/shadow_feature_store/ output/shadow_baseline/ output/shadow_nn/
           if git diff --cached --quiet; then
             echo "No pipeline output changes"
           else
