@@ -1,0 +1,34 @@
+name: fetch-a-plus-daily-official
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/fetch_a_plus_daily_official.py'
+      - '.github/workflows/fetch-a-plus-daily-official.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch official A+ daily PIT data
+        run: python scripts/fetch_a_plus_daily_official.py
+      - name: Commit outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/a_plus_daily/
+          if git diff --cached --quiet; then
+            echo "No output changes"
+          else
+            git commit -m "Update official A+ daily PIT data"
+            git push
+          fi
