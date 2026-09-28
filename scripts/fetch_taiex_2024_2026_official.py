@@ -7,11 +7,11 @@ from __future__ import annotations
 import csv, json, re, time, urllib.request
 from pathlib import Path
 
-START_YEAR=2024
+START_YEAR=2023
 END_YEAR=2026
 MAX_DATE="2026-09-24"
-OUT=Path("output/taiex_2024_2026_official.csv")
-QA=Path("output/taiex_2024_2026_qa.json")
+OUT=Path("output/taiex_2023_2026_official.csv")
+QA=Path("output/taiex_2023_2026_qa.json")
 UA="stock-data-helper taiex-shadow-warmup/1.0"
 
 def get_json(url,retries=4):
@@ -80,12 +80,12 @@ def main():
     with OUT.open("w",encoding="utf-8-sig",newline="") as f:
         w=csv.DictWriter(f,fieldnames=["date","open","high","low","close","source","source_url","pit_available_date"])
         w.writeheader();w.writerows(rows)
-    summary={"status":"PASS" if len(rows)>=650 else "FAIL_SHORT",
+    summary={"status":"PASS" if len(rows)>=850 else "FAIL_SHORT",
              "rows":len(rows),"first":rows[0]["date"] if rows else None,
              "last":rows[-1]["date"] if rows else None,
              "max_date":MAX_DATE,"formal_weight":0,"production":"NO_INTERACTION"}
     QA.write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
-    if len(rows)<650: raise RuntimeError(f"TAIEX rows<650: {summary}")
+    if len(rows)<850: raise RuntimeError(f"TAIEX rows<850: {summary}")
     if not rows or rows[-1]["date"]<"2026-09-18": raise RuntimeError(f"stale: {summary}")
     print(json.dumps(summary,ensure_ascii=False))
 if __name__=="__main__": main()
