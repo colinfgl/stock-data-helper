@@ -21,7 +21,9 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-MIN_ROWS = {"3443": 850, "6526": 680, "3189": 850, "2345": 850, "3017": 850}\n\nSYMBOLS = {
+MIN_ROWS = {"3443": 850, "6526": 680, "3189": 850, "2345": 850, "3017": 850}
+
+SYMBOLS = {
     "3443": "創意",
     "6526": "達發",
     "3189": "景碩",
