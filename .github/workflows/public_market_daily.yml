@@ -29,7 +29,7 @@ jobs:
           python3 - <<'PYCODE'
           """Public exchange originals only; no portfolio data, forecasts, or trading writes."""
           import concurrent.futures, datetime as dt, decimal, hashlib, json, os, pathlib, re, sys, time
-          import urllib.request, urllib.error, urllib.parse
+          import urllib.request, urllib.error, urllib.parse, http.client
           from zoneinfo import ZoneInfo
 
           MAX = 20_000_000
@@ -133,7 +133,7 @@ jobs:
               def fetch(item):
                   key, url = item
                   history = []
-                  for attempt in range(1, 3):
+                  for attempt in range(1, 4 if key == 'tpex' else 3):
                       rec = {
                           'key': key,
                           'requested_url': url,
@@ -173,10 +173,18 @@ jobs:
                           break
                       except Exception as exc:
                           rec.update(status='NOT_VALIDATED', error=type(exc).__name__ + ': ' + str(exc))
+                          if isinstance(exc, http.client.IncompleteRead):
+                              partial = bytes(exc.partial)
+                              partial_name = f'{key}.attempt{attempt}.unusable_partial'
+                              (root / partial_name).write_bytes(partial)
+                              rec.update(partial_path=partial_name, partial_bytes=len(partial),
+                                         partial_sha256=hashlib.sha256(partial).hexdigest(),
+                                         partial_usable_as_official_source=False)
                           history.append(rec)
-                          if attempt == 1 and (
+                          if attempt < (3 if key == 'tpex' else 2) and (
                               rec.get('http_status') in (429, 500, 502, 503, 504)
                               or 'URLError' in rec['error']
+                              or isinstance(exc, http.client.IncompleteRead)
                           ):
                               time.sleep(2)
                               continue
@@ -238,6 +246,7 @@ jobs:
 
               attempts = []
               selected = None
+              partial_current_date = None
               for candidate in candidates:
                   ready, manifest = fetch_date(candidate)
                   attempts.append({
@@ -248,6 +257,13 @@ jobs:
                       selected = candidate
                       break
                   if requested:
+                      break
+                  source_state = {s['key']: s['result'].get('status') for s in manifest['sources']}
+                  if (source_state.get('twse') == 'PARSED_EXACT_DATE'
+                          and source_state.get('ohlc') == 'PARSED_EXACT_DATE'):
+                      # Valid current TWSE/OHLC with missing TPEx must not be
+                      # disguised as an earlier complete trading day.
+                      partial_current_date = candidate
                       break
 
               receipt = {
@@ -260,8 +276,9 @@ jobs:
                   'mode': mode,
                   'requested_date': requested or None,
                   'selected_data_date': selected.isoformat() if selected else None,
+                  'partial_current_date': partial_current_date.isoformat() if partial_current_date else None,
                   'attempts': attempts,
-                  'status': 'MARKET_BYTES_READY' if selected else 'NO_COMPLETED_TRADING_DATA_FOUND',
+                  'status': 'MARKET_BYTES_READY' if selected else ('SOURCE_PARTIAL_HOLD' if partial_current_date else 'NO_COMPLETED_TRADING_DATA_FOUND'),
                   'scope': 'PUBLIC_SOURCES_ONLY_NO_PORTFOLIO_NO_FORECAST_NO_OOS',
               }
               pathlib.Path('public-daily').mkdir(parents=True, exist_ok=True)
