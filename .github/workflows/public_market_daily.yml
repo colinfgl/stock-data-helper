@@ -282,3 +282,4 @@ jobs:
           path: public-daily/
           if-no-files-found: error
           retention-days: 90
+# 2026-10-12 manual recovery trigger: public-source-only capture; no forecasts, trades, Cash or OOS.
