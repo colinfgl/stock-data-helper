@@ -1,0 +1,57 @@
+name: stock-20261013-public-adjusted-source-closure
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stock_adjusted_20261013_source_closure.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: stock-20261013-source-only-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  capture:
+    name: Public sources batch ${{ matrix.batch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0,1,2,3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download existing SHA-verified 10/12 TWSE and TPEx original source
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: 11752624116
+          run-id: 38263174970
+          github-token: ${{ github.token }}
+          path: official_inputs
+          merge-multiple: true
+      - name: Syntax test and research-only adjusted close capture
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: |
+          python -m py_compile scripts/stock_adjusted_20261013_source_closure.py
+          python scripts/stock_adjusted_20261013_source_closure.py --official-dir official_inputs --out source_20261013_batch${BATCH} --batch ${BATCH}
+      - name: Preserve exact original responses and every failed symbol
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-source-20261013-batch${{ matrix.batch }}-run${{ github.run_id }}
+          path: |
+            source_20261013_batch${{ matrix.batch }}/
+            scripts/stock_adjusted_20261013_source_closure.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Explain limited qualification
+        if: always()
+        run: |
+          echo 'RESEARCH SOURCES ONLY: official daily close and provider raw adjusted history are different source roles.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No changes to user holdings, orders, model weights, forecasts, Formal, Natural or OOS.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Corporate-action exhaustive coverage and same-run legal premarket seal require independent gates.' >> "$GITHUB_STEP_SUMMARY"
