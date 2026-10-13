@@ -1,0 +1,45 @@
+name: stock-research-dividend-factor-threshold-qa
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-dividend-factor-threshold-20261013]
+    paths:
+      - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
+      - '.github/workflows/stock_dividend_factor_reconciliation_qa_20261013.yml'
+permissions:
+  contents: read
+jobs:
+  factor-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run 15 synthetic guards
+        run: |
+          python -m py_compile scripts/stock_dividend_factor_reconciliation_v1_20261013.py
+          mkdir -p factor_qa
+          python scripts/stock_dividend_factor_reconciliation_v1_20261013.py --self-test > factor_qa/selftest.json
+          python - <<'PY'
+          import json
+          x=json.load(open('factor_qa/selftest.json'))
+          assert x['status']=='PASS' and x['total']==x['passed']==15,x
+          assert x['scope']=='SYNTHETIC_NO_PRIVATE_INPUT_NO_FORMAL'
+          PY
+      - name: Preserve code and test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-dividend-threshold-qa
+          path: |
+            scripts/stock_dividend_factor_reconciliation_v1_20261013.py
+            factor_qa/selftest.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Evidence tiers
+        if: always()
+        run: |
+          echo 'Synthetic research QA only. Real 6451 private raw SHA and TPEx announcements are held in user research records.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No scheduled trading task, issuer formal, natural, OOS or cash mutation.' >> "$GITHUB_STEP_SUMMARY"
