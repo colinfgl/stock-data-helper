@@ -2,7 +2,7 @@
 """Date-aware public input collector. 2026-10-13 one-time 3y history variant. Source only; no predictions."""
 from __future__ import annotations
 import argparse, concurrent.futures as cf, datetime as dt, hashlib, json, math
-import pathlib, re, time, urllib.request, urllib.error
+import pathlib, re, time, urllib.request, urllib.error, http.client
 from zoneinfo import ZoneInfo
 TZ=ZoneInfo('Asia/Taipei')
 class InputError(ValueError): pass
@@ -91,7 +91,7 @@ def get_json(url,path,attempt_limit=2):
     errors=[];diagnostics=[];path=pathlib.Path(path)
     def reject_constant(value): raise ValueError('NONFINITE_JSON:'+value)
     for n in range(attempt_limit):
-        response=None;body=None;retryable=False
+        response=None;body=None;retryable=False;body_fully_received=False
         info={'attempt':n+1,'requested_at':stamp(),'root_cause':'UNDETERMINED'}
         try:
             req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 premarket-data/1.0','Accept':'application/json'})
@@ -99,6 +99,7 @@ def get_json(url,path,attempt_limit=2):
             info['http_status']=response.getcode()
             body=response.read(33554433)
             if len(body)>33554432:raise InputError('RESPONSE_SIZE_LIMIT')
+            body_fully_received=True
             p=json.loads(body,parse_constant=reject_constant)
             if not isinstance(p,dict):raise InputError('JSON_OBJECT_REQUIRED')
             path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
@@ -118,6 +119,22 @@ def get_json(url,path,attempt_limit=2):
             try:body=e.read(262145)
             except Exception as read_error:info['body_read_error']=type(read_error).__name__+': '+str(read_error)
             errors.append(type(e).__name__+': '+str(e))
+        except (http.client.IncompleteRead,http.client.RemoteDisconnected,
+                ConnectionResetError,BrokenPipeError) as e:
+            # An incomplete original HTTP body is never an official source.
+            # Retry only once with a brand-new HTTP response, preserving raw
+            # partial evidence but never promoting it as valid market data.
+            info.update(category='NETWORK_BODY_INCOMPLETE'
+                        if isinstance(e,http.client.IncompleteRead)
+                        else 'NETWORK_CONNECTION_INTERRUPTED',
+                        error_type=type(e).__name__,
+                        root_cause='HTTP_TRANSPORT_INCOMPLETE_UNVERIFIED')
+            if isinstance(e,http.client.IncompleteRead):
+                body=e.partial if isinstance(e.partial,bytes) else None
+                info['partial_received_bytes']=len(body or b'')
+                info['expected_remaining_bytes']=e.expected
+            retryable=True
+            errors.append(type(e).__name__+': '+str(e))
         except (urllib.error.URLError,TimeoutError,ssl.SSLError) as e:
             reason=e.reason if isinstance(e,urllib.error.URLError) else e
             category='NETWORK_DNS_ERROR' if isinstance(reason,socket.gaierror) else 'NETWORK_TIMEOUT' if isinstance(reason,TimeoutError) else 'NETWORK_TLS_ERROR' if isinstance(reason,ssl.SSLError) else 'NETWORK_ERROR'
@@ -133,7 +150,7 @@ def get_json(url,path,attempt_limit=2):
                 except Exception:info['response_close_failed']=True
         info['received_at']=stamp()
         if body is not None:
-            full=len(body)<=262144;raw=body[:262144]
+            full=body_fully_received and len(body)<=262144;raw=body[:262144]
             evidence=path.with_name(path.name+f'.attempt-{n+1}.response.raw')
             try:
                 evidence.parent.mkdir(parents=True,exist_ok=True)
