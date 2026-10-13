@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-two-source-yahoo-history-recovery-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -13,8 +13,10 @@ on:
       - 'scripts/stock_short_history_research_proxy_v1_20261013.py'
       - 'scripts/premarket_daily_inputs_3y_20261013.py'
       - 'scripts/stock_network_partial_retry_guard_20261013.py'
+      - 'scripts/stock_dual_origin_prior_close_research_v1_20261013.py'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: stock-daily-source68-${{ github.ref }}
   cancel-in-progress: false
@@ -78,6 +80,16 @@ jobs:
           assert x['status']=='PASS' and x['passed']==x['total']==10,x
           assert x['scope']=='MOCK_HTTP_ONLY_NO_NETWORK_NO_CANONICAL_OUTPUT_NO_NATURAL'
           PY
+      - name: Validate 10 research two-parent source lineage guards
+        run: |
+          python -m py_compile scripts/stock_dual_origin_prior_close_research_v1_20261013.py
+          python scripts/stock_dual_origin_prior_close_research_v1_20261013.py --self-test > source_gate_qa/dual10_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/dual10_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==10,x
+          assert x['scope']=='PURE_SYNTHETIC_TWO_RAW_SOURCES_NO_FORMAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,10 +102,11 @@ jobs:
             scripts/stock_short_history_research_proxy_v1_20261013.py
             scripts/premarket_daily_inputs_3y_20261013.py
             scripts/stock_network_partial_retry_guard_20261013.py
+            scripts/stock_dual_origin_prior_close_research_v1_20261013.py
           retention-days: 30
           if-no-files-found: error
   collect-next-session-source:
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/stock-two-source-yahoo-history-recovery-20261013') }}
     needs: source-gate-unit-qa
     runs-on: ubuntu-latest
     timeout-minutes: 29
@@ -190,6 +203,43 @@ jobs:
                   dest.write((output/'short_history_research_proxy.md').read_text(encoding='utf8'))
                   dest.write('\nNote: target 08:09:30 is only the prospective input eligibility boundary. It is NOT a ChatGPT PRECHECK_START/RunID/ForecastSHA seal.\n')
           PY
+      - name: Classify 10-13 historical Yahoo regression scope only
+        if: always()
+        id: archive_scope
+        run: |
+          localday=$(TZ=Asia/Taipei date +%Y%m%d)
+          if [ "$localday" = '20261013' ]; then
+            echo 'use_older_original=true' >> "$GITHUB_OUTPUT"
+            echo 'Only 20261013 exact-day research bridge will fetch one old immutable artifact.'
+          else
+            echo 'use_older_original=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Read 10-12 original Yahoo bytes from pinned prior GitHub artifact
+        if: steps.archive_scope.outputs.use_older_original == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-public-input-20261013-38265016756-1
+          repository: colinfgl/stock-data-helper
+          run-id: 38265016756
+          github-token: ${{ github.token }}
+          path: stock_previous_source_original
+      - name: Research-only two-original 68-symbol historical bridge, nonblocking
+        if: always()
+        continue-on-error: true
+        run: |
+          previous='stock_previous_source_original/public_input_20261013'
+          if [ ! -f "$previous/acquisition_receipt.json" ]; then
+            echo 'OLD_RAW_UNAVAILABLE_NO_DUAL_RECOVERY: preserve original direct source HOLD'
+            exit 0
+          fi
+          python scripts/stock_dual_origin_prior_close_research_v1_20261013.py \
+            --prior-dir "$previous" \
+            --current-dir stock_next_session_original_source_raw \
+            --out stock_next_session_original_source/dual_origin_research
+          if [ -f stock_next_session_original_source/dual_origin_research/dual_original_research_68.md ]; then
+            cat stock_next_session_original_source/dual_origin_research/dual_original_research_68.md >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Preserve all raw original bytes and all failed-symbol receipts
         if: always()
         uses: actions/upload-artifact@v4
