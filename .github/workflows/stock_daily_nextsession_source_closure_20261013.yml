@@ -8,7 +8,7 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-source-cross-midnight-20261014]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -161,7 +161,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
   collect-next-session-source:
-    if: ${{ always() && needs.source-gate-unit-qa.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && needs.source-recovery-decision.outputs.should_collect == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/stock-source-cross-midnight-20261014')) }}
+    if: ${{ always() && needs.source-gate-unit-qa.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && needs.source-recovery-decision.outputs.should_collect == 'true')) }}
     needs: [source-gate-unit-qa, source-recovery-decision]
     runs-on: ubuntu-latest
     timeout-minutes: 29
