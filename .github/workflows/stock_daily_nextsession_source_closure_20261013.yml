@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -29,11 +29,11 @@ jobs:
         run: |
           mkdir -p source_gate_qa
           python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py
-          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/32_tests.json
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/35_tests.json
           python - <<'PY'
           import json
-          x=json.load(open('source_gate_qa/32_tests.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==32
+          x=json.load(open('source_gate_qa/35_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==35
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
           PY
       - name: Validate optional dividend-factor research helper independently
@@ -203,6 +203,12 @@ jobs:
           assert set(x['taiex_ohlc'])=={'open','high','low','close'}
           assert x['total_unique_original_raw_shas']==71
           assert x['full_official_symbol_names'] is True
+          import hashlib,re
+          ix=pathlib.Path('stock_next_session_original_source/model_input/h9_source_index.json')
+          assert re.fullmatch(r'[0-9a-f]{64}',x['official_calendar_sha256'])
+          assert json.loads(ix.read_bytes())['official_calendar_sha256']==x['official_calendar_sha256']
+          assert hashlib.sha256(ix.read_bytes()).hexdigest()==x['source_index_sha256']
+          assert pathlib.Path('stock_next_session_original_source/source_closure_readback.json').read_bytes()==p.read_bytes()
           assert x['formal_input_qualified']==False and x['natural_credit']==x['oos_credit']==0
           print('RESEARCH_SOURCE_ONLY_READY; formal issuer/full H9 native forecast remains unqualified:',x['target_date'],x['source_date'])
           PY
