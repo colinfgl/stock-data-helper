@@ -1,0 +1,41 @@
+name: stock-TPEx-public-exdividend-date-window-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-tpex-exdiv-firstparty-20261013]
+    paths:
+      - '.github/workflows/stock_tpex_exdaily_historical_20261013.yml'
+permissions:
+  contents: read
+jobs:
+  historic-tpex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Strict ROC-date and official-stock parser tests
+        run: |
+          python -m py_compile scripts/stock_tpex_exdaily_historical_20261013.py
+          python scripts/stock_tpex_exdaily_historical_20261013.py --self-test
+      - name: Fetch bounded official TPEx date windows and preserve complete original bytes
+        id: probe
+        continue-on-error: true
+        run: python scripts/stock_tpex_exdaily_historical_20261013.py --out tpex_public_exdaily_20261013
+      - name: Archive all original bytes, parse receipts, and failed attempts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-tpex-historical-exdaily-${{ github.run_id }}
+          path: |
+            tpex_public_exdaily_20261013/
+            scripts/stock_tpex_exdaily_historical_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Research only contract
+        if: always()
+        run: |
+          echo "Date-proven TPEx ex-right/exdividend only. A workflow SUCCESS does not mean an exact-source PASS if the capture step is marked continue-on-error." >> "$GITHUB_STEP_SUMMARY"
+          echo "No private 68-stock portfolio, no brokerage, no Formal/ForecastSHA/PredictionKey, no Natural/OOS, no 08:10/19:00 task modifications." >> "$GITHUB_STEP_SUMMARY"
