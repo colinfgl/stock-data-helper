@@ -38,25 +38,64 @@ def close_val(v):
 def official_closes(raw,venue):
     j=json.loads(raw)
     ensure(isinstance(j.get('tables'),list),'OFFICIAL_TABLE_SCHEMA_NOT_FOUND')
-    out={}
-    for t in j['tables']:
-        f=t.get('fields') or []
-        idx = 8 if venue=='TWSE' and '證券代號' in f else (2 if venue=='TPEx' and '代號' in f else None)
-        if idx is None:continue
-        for row in t.get('data',[]):
-            if not isinstance(row,list) or len(row)<=idx:continue
-            sym=str(row[0]);val=close_val(row[idx])
+    ensure(str(j.get('stat','')).lower()=='ok','OFFICIAL_STATUS_INVALID_'+venue)
+    symbol_field,price_field=('證券代號','收盤價') if venue=='TWSE' else ('代號','收盤')
+    out={};located=0
+    for table in j['tables']:
+        fields=table.get('fields') or []
+        if symbol_field not in fields:continue
+        ensure(fields.count(symbol_field)==1 and fields.count(price_field)==1,
+               'OFFICIAL_SYMBOL_PRICE_FIELDS_AMBIGUOUS_'+venue)
+        ci=fields.index(symbol_field);pi=fields.index(price_field)
+        located+=1
+        for row in table.get('data',[]):
+            ensure(isinstance(row,list) and len(row)>max(ci,pi),'OFFICIAL_ROW_SCHEMA_'+venue)
+            sym=str(row[ci]).strip();val=close_val(row[pi])
+            ensure(bool(sym),'OFFICIAL_EMPTY_SYMBOL_'+venue)
             if sym in out:raise ValueError('DUPLICATE_OFFICIAL_SYMBOL_'+sym)
             if val is not None:out[sym]=val
-    ensure(out,'OFFICIAL_VALUES_EMPTY_'+venue)
+    ensure(located>0 and out,'OFFICIAL_VALUES_EMPTY_'+venue)
     return j['date'],out
+
+def official_taiex_ohlc(raw,source_cutoff):
+    doc=json.loads(raw)
+    ensure(isinstance(doc,dict),'OFFICIAL_TAIEX_SCHEMA_REQUIRED')
+    ensure(str(doc.get('date'))==source_cutoff and str(doc.get('stat','')).lower()=='ok',
+           'OFFICIAL_TAIEX_DATE_OR_STATUS')
+    expected=('日期','開盤指數','最高指數','最低指數','收盤指數')
+    fields=doc.get('fields')
+    ensure(isinstance(fields,list) and all(fields.count(n)==1 for n in expected),
+           'OFFICIAL_TAIEX_FIELDS_REQUIRED')
+    indexes=[fields.index(n) for n in expected]
+    ensure(isinstance(doc.get('data'),list) and bool(doc['data']),'OFFICIAL_TAIEX_DATA_REQUIRED')
+    target=dt.datetime.strptime(source_cutoff,'%Y%m%d').date()
+    found=[]
+    for row in doc['data']:
+        ensure(isinstance(row,list) and len(row)>max(indexes),'OFFICIAL_TAIEX_ROW_SCHEMA')
+        rawdate=str(row[indexes[0]]).strip()
+        match=re.fullmatch(r'(\d{2,4})/(\d{1,2})/(\d{1,2})',rawdate)
+        ensure(match is not None,'OFFICIAL_TAIEX_ROC_DATE_PARSE')
+        y,m,d=map(int,match.groups())
+        try:localday=dt.date(y+1911 if y<1911 else y,m,d)
+        except ValueError as ex:raise ValueError('OFFICIAL_TAIEX_ROC_DATE_INVALID') from ex
+        ensure(localday<=target,'OFFICIAL_TAIEX_AFTER_CUTOFF_BAR')
+        if localday!=target:continue
+        ensure(not found,'OFFICIAL_TAIEX_DUPLICATE_SOURCE_DAY')
+        values=[close_val(row[i]) for i in indexes[1:]]
+        ensure(all(v is not None for v in values),'OFFICIAL_TAIEX_NONFINITE_OR_NONPOSITIVE')
+        opening,high,low,closing=values
+        ensure(low<=min(opening,closing)<=max(opening,closing)<=high,
+               'OFFICIAL_TAIEX_HIGH_LOW_INCONSISTENCY')
+        found.append({'open':opening,'high':high,'low':low,'close':closing})
+    ensure(len(found)==1,'OFFICIAL_TAIEX_TARGET_DAY_ROW_MISSING')
+    return found[0]
 
 def yahoo_info(raw,ticker,previous):
     j=json.loads(raw)['chart']['result'][0]
     ensure(j['meta']['symbol']==ticker,'YAHOO_SYMBOL_MISMATCH')
     times=j['timestamp'];quote=j['indicators']['quote'][0]['close'];adj=j['indicators']['adjclose'][0]['adjclose']
     ensure(len(times)==len(quote)==len(adj),'YAHOO_ARRAY_DIMENSIONS_INVALID')
-    dates=[dt.datetime.fromtimestamp(ts,dt.timezone.utc).strftime('%Y%m%d') for ts in times]
+    dates=[dt.datetime.fromtimestamp(ts,ZoneInfo('Asia/Taipei')).strftime('%Y%m%d') for ts in times]
     ensure(len(dates)==len(set(dates)) and dates==sorted(dates),'YAHOO_DATE_DUPLICATE_OR_UNSORTED')
     ensure(dates[-1]==previous,'PROVIDER_LATEST_DATE_MISMATCH')
     for x in dates:ensure(x<=previous,'PROVIDER_FUTURE_BAR_LEAKAGE')
@@ -109,6 +148,16 @@ def strict_preflight(index,source_zip,h9_archive,target_date,data_cutoff):
             raw=z.read(path)
             ensure(sha(raw)==index['official_original_shas'][kind],'OFFICIAL_ORIGINAL_RAW_SHA_MISMATCH_'+kind)
             ensure(json.loads(raw).get('date')==previous,'OFFICIAL_PRIOR_DAY_MISMATCH_'+kind)
+            if kind=='ohlc':
+                ohlc=official_taiex_ohlc(raw,previous)
+                declared=index.get('official_taiex_ohlc')
+                if declared is not None:
+                    ensure(isinstance(declared,dict) and set(declared)==set(ohlc),
+                           'OFFICIAL_TAIEX_DECLARED_SCHEMA_CONFLICT')
+                    ensure(all(isinstance(declared[k],(int,float)) and
+                               abs(declared[k]-v)<=max(0.001,v*0.00000001)
+                               for k,v in ohlc.items()),'OFFICIAL_TAIEX_DECLARED_NUMERIC_CONFLICT')
+                res['OfficialOHLCValues']=ohlc
             if kind!='ohlc':
                 session,vals=official_closes(raw,'TWSE' if kind=='twse' else 'TPEx');
                 for sym,val in vals.items():
@@ -176,7 +225,7 @@ def execute(index_path,source_zip_path,orig_path,*,target_date,data_cutoff,run_i
             def roc(t):a,b,c=t.split('/');return f'{int(a)+1911:04d}{int(b):02d}{int(c):02d}'
             targetrow=[r for r in index_raw['data'] if roc(r[0])==source_cut]
             ensure(len(targetrow)==1,'TAIEX_CLOSE_PARENT_ORIGINAL_MISSING')
-            tai_close=close_val(targetrow[0][4]);ensure(tai_close is not None,'TAIEX_CLOSE_BAD')
+            tai_close=source_audit['OfficialOHLCValues']['close'];ensure(tai_close is not None,'TAIEX_CLOSE_BAD')
             # This is a schema-compatible research input with UNKNOWN volume, not an invented OHLC.
             (work/'index.txt').write_text(json.dumps({'date':source_cut,'data':[[targetrow[0][0],None,None,None,str(tai_close)]]}),encoding='utf8')
             valid=[];invalid=[]; session_set=set()
@@ -198,7 +247,8 @@ def execute(index_path,source_zip_path,orig_path,*,target_date,data_cutoff,run_i
         # Recover the exact previously-official October index calendar from the indexed
         # first-party original. Without this, stock Ridge coefficients drift even if
         # every individual company's SHA and 10/12 close is correct.
-        firstparty_taiex={roc(r[0]):close_val(r[4]) for r in index_raw['data']}
+        di=index_raw['fields'].index('日期');ci=index_raw['fields'].index('收盤指數')
+        firstparty_taiex={roc(r[di]):close_val(r[ci]) for r in index_raw['data']}
         for d in session_set:
             # Keep all session dates in calendar, including September sessions
             # where first-party TAIEX OHLC isn't supplied by the current raw package.
@@ -260,6 +310,24 @@ def selftest():
     cases['sha_is_sha64']='PASS' if re.fullmatch('[0-9a-f]{64}',sha(b'a')) else 'FAIL'
     cases['no_formal_writes']='PASS' if RESEARCH_ONLY.startswith('MANUAL') else 'FAIL'
     cases['official_source_scope_not_issuer_complete']='PASS' if MODEL_SHA.startswith('d4cc') else 'FAIL'
+    fixture={'date':'20261012','stat':'OK','fields':['日期','開盤指數','最高指數','最低指數','收盤指數'],
+        'data':[['115/10/08','99','102','95','100'],['115/10/12','100','105','95','102']]}
+    cases['taiex_original_valid']='PASS' if official_taiex_ohlc(canon(fixture),'20261012')['close']==102.0 else 'FAIL'
+    def test_bad(name,fn):
+        o=json.loads(json.dumps(fixture));fn(o)
+        probe(name,lambda:official_taiex_ohlc(canon(o),'20261012'))
+    test_bad('taiex_no_target_day',lambda x:x['data'].pop())
+    test_bad('taiex_duplicate_day',lambda x:x['data'].append(x['data'][-1][:]))
+    test_bad('taiex_future_day',lambda x:x['data'].append(['115/10/13','100','105','95','102']))
+    test_bad('taiex_missing_high_field',lambda x:x['fields'].__setitem__(2,'未知高點'))
+    test_bad('taiex_outside_high',lambda x:x['data'][-1].__setitem__(4,'106'))
+    test_bad('taiex_nonfinite_close',lambda x:x['data'][-1].__setitem__(4,'NaN'))
+    test_bad('taiex_incorrect_date',lambda x:x['data'][-1].__setitem__(0,'115/99/12'))
+    sample={'date':'20261012','stat':'OK','tables':[{'fields':['收盤價','證券代號'],
+        'data':[['102','2330']]}]}
+    cases['official_column_shuffle']='PASS' if official_closes(canon(sample),'TWSE')[1]['2330']==102 else 'FAIL'
+    sample['tables'][0]['fields']=['證券代號','未知']
+    probe('official_missing_price_col',lambda:official_closes(canon(sample),'TWSE'))
     ok=all(x=='PASS' for x in cases.values());return {'status':'PASS' if ok else 'FAIL','tests':cases,'passed':sum(x=='PASS' for x in cases.values()),'total':len(cases),'scope':'PURE_SYNTHETIC_NO_PRIVATE_INPUT_NO_FORMAL'}
 
 def main():
