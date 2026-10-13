@@ -2,9 +2,13 @@ name: stock-daily-nextsession-68-source-closure
 on:
   workflow_dispatch:
   schedule:
-    - cron: '45 12 * * 1-5'
+    - cron: '45 12 * * 1,2,3,4,5' # Semantically unchanged weekdays 20:45 Asia/Taipei; refresh scheduled workflow actor
+  workflow_run:
+    workflows: [public-market-daily]
+    types: [completed]
+    branches: [main]
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -15,6 +19,7 @@ on:
       - 'scripts/stock_network_partial_retry_guard_20261013.py'
       - 'scripts/stock_dual_origin_prior_close_research_v1_20261013.py'
       - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
+      - 'scripts/stock_source_trigger_guard_v2_20261013.py'
 permissions:
   contents: read
   actions: read
@@ -101,6 +106,16 @@ jobs:
           assert x['status']=='PASS' and x['passed']==x['total']==12,x
           assert x['scope']=='SYNTHETIC_OFFICIAL_INDEX_NO_CASH_NO_FORMAL'
           PY
+      - name: Validate 15 missing-schedule no-duplicate conditional recovery guards
+        run: |
+          python -m py_compile scripts/stock_source_trigger_guard_v2_20261013.py
+          python scripts/stock_source_trigger_guard_v2_20261013.py --self-test > source_gate_qa/trigger15_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/trigger15_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==15,x
+          assert x['scope']=='SYNTHETIC_PURE_GATE_NO_GITHUB_API_OR_FORMAL_NATURAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -115,11 +130,38 @@ jobs:
             scripts/stock_network_partial_retry_guard_20261013.py
             scripts/stock_dual_origin_prior_close_research_v1_20261013.py
             scripts/stock_taiex_14gap_research_v1_20261013.py
+            scripts/stock_source_trigger_guard_v2_20261013.py
           retention-days: 30
           if-no-files-found: error
+  source-recovery-decision:
+    if: ${{ github.event_name == 'workflow_run' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      should_collect: ${{ steps.prove.outputs.should_collect }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read existing 20:45 source execution proofs before any fallback
+        id: prove
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/stock_source_trigger_guard_v2_20261013.py --out stock_source_recovery_proof/20261013_recovery_decision.json
+          cat stock_source_recovery_proof/20261013_recovery_decision.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve skipped/recovery source decision independently
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-source-trigger-recovery-gate-${{ github.run_id }}
+          path: stock_source_recovery_proof/
+          retention-days: 30
+          if-no-files-found: warn
   collect-next-session-source:
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    needs: source-gate-unit-qa
+    if: ${{ always() && needs.source-gate-unit-qa.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && needs.source-recovery-decision.outputs.should_collect == 'true')) }}
+    needs: [source-gate-unit-qa, source-recovery-decision]
     runs-on: ubuntu-latest
     timeout-minutes: 29
     steps:
@@ -307,6 +349,7 @@ jobs:
         if: always()
         run: |
           echo "Source-only GH helper after close, NOT a second formal ChatGPT schedule." >> "$GITHUB_STEP_SUMMARY"
+          echo "TriggerClass: schedule=normal GitHub source, workflow_dispatch=manual, workflow_run=RECOVERY_AFTER_PUBLIC_MARKET_ONLY; the latter NEVER contributes Normal/Natural/OOS, and duplicate recent successful source runs are skipped." >> "$GITHUB_STEP_SUMMARY"
           echo "Successful exact-day TWSE+TPEx and verified TAIEX O/H/L/C plus 68 separate Yahoo SHA sources are required; green push CI is only synthetic QA." >> "$GITHUB_STEP_SUMMARY"
           echo "Provider bar asof uses original timestamp rather than a fabricated 13:30 publication timestamp." >> "$GITHUB_STEP_SUMMARY"
           echo "Symbol display names are from the same original first-party TWSE/TPEx file; Yahoo English shortName remains audit-only." >> "$GITHUB_STEP_SUMMARY"
