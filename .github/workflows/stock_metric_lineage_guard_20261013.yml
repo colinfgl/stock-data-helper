@@ -1,0 +1,37 @@
+name: stock-metric-lineage-guard-v1-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-5371-3718-source-recovery-20261013]
+    paths:
+      - '.github/workflows/stock_metric_lineage_guard_20261013.yml'
+permissions:
+  contents: read
+jobs:
+  metric-lineage-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Import/syntax and twenty source/metric lineage QA tests
+        run: |
+          python -m py_compile scripts/stock_metric_lineage_runtime_guard_v1_20261013.py
+          python scripts/stock_metric_lineage_runtime_guard_v1_20261013.py --self-test --output lineage_qa_20261013/validation.json
+      - name: Preserve code and actual QA result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-metric-lineage-qa-${{ github.run_id }}
+          path: |
+            lineage_qa_20261013/validation.json
+            scripts/stock_metric_lineage_runtime_guard_v1_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Declare no production model promotion
+        if: always()
+        run: |
+          echo "Research-only validation library, not installed in scheduled runtime or formal Model." >> "$GITHUB_STEP_SUMMARY"
+          echo "No private portfolio/forecast data, no model/trade/portfolio/Config/Prediction writes, no Natural or OOS claims." >> "$GITHUB_STEP_SUMMARY"
