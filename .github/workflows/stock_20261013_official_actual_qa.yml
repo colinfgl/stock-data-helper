@@ -1,0 +1,61 @@
+name: stock-20261013-official-actual-source-audit
+on:
+  push:
+    branches: [stock-1013-official-actual-20261013]
+    paths:
+      - 'scripts/stock_20261013_actual_official_v1.py'
+      - '.github/workflows/stock_20261013_official_actual_qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  postclose-source-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate parser and 12 source guards
+        run: |
+          python -m py_compile scripts/stock_20261013_actual_official_v1.py
+          mkdir -p stock_1013_official_actual
+          python scripts/stock_20261013_actual_official_v1.py --self-test > stock_1013_official_actual/selftest.json
+          python - <<'PY'
+          import json
+          x=json.load(open('stock_1013_official_actual/selftest.json'))
+          assert x['Status']=='PASS' and x['Total']==x['Passed']==12,x
+          PY
+      - name: Fetch public official TWSE and TPEx exact-day actual OHLC, no forecast write
+        id: collect
+        continue-on-error: true
+        run: |
+          python scripts/stock_20261013_actual_official_v1.py --target 20261013 --out stock_1013_official_actual | tee stock_1013_official_actual/runtime.log
+      - name: Display any verified part of 68 official stock table
+        if: always()
+        run: |
+          if [ -f stock_1013_official_actual/official_actual_68.md ]; then
+            cat stock_1013_official_actual/official_actual_68.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Current official actuals unavailable: see preserved source receipts, no fabricated closes." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Research postclose facts only; no mutation of existing ChatGPT 19:00 run or canonical Prediction/Outcome." >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve original byte evidence and readable 68-row report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-20261013-official-actual-source
+          path: stock_1013_official_actual/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Reject partial original actual when claiming all 68 PASS
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          z=json.loads(pathlib.Path('stock_1013_official_actual/official_actual_68.json').read_bytes())
+          assert z['Status']=='OFFICIAL_68_READY',z.get('Problems')
+          assert z['CountVerified']==68 and len(z['Records'])==68
+          assert z['TAIEX'] and set(z['TAIEX'])=={'Open','High','Low','Close'}
+          assert z['FormalPredictionWritten'] is False and z['NaturalCredit']==z['OOSCredit']==0
+          PY
