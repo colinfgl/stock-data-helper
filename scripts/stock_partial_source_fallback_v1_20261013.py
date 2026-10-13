@@ -104,6 +104,31 @@ def chart_check(path, symbol, cutoff, prior_close,receipt, min_retrieved_at=None
     except (ValueError,KeyError,IndexError,TypeError,OverflowError,OSError,json.JSONDecodeError) as exc:
         return None,None,str(exc)[:180]
 
+def render_markdown(result:dict)->str:
+    """A readable research receipt, never a fabricated H9 forecast."""
+    def safe(x):
+        return str(x if x is not None else '').replace('|','\\|').replace('\n',' ')
+    lines=['# 台股逐檔資料備援（研究版／非正式預測）','',
+      f"資料目標日：{safe(result.get('TargetDate','未取得'))}；前收交易日：{safe(result.get('SourceDate','未取得'))}",
+      f"官方前收有效：{result.get('OfficialPriorCloseCount',0)}/{result.get('TotalSymbols',0)}；",
+      f"個股調整價來源有效：{result.get('IndependentAdjustedSourceCount',0)}/{result.get('TotalSymbols',0)}；缺值 {result.get('SourceHolds',0)} 檔。",'',
+      '**本報告不包含正式 H9 股價預測、下單訊號或 Natural／OOS 績效。**','']
+    rows=result.get('Rows') or []
+    if not rows:
+        lines.append('來源收據不完整；無可核實的逐檔前收，保留缺值而不使用前日價格補造。')
+    else:
+        lines.extend(['| 股票代號 | 官方名稱 | 官方前收 | 獨立調整價來源 | 缺值原因 |',
+                      '|---|---|---:|---|---|'])
+        for row in rows:
+            close=row.get('OfficialClose')
+            value=f'{close:,.2f}' if valid_positive(close) else 'MISSING'
+            lines.append('| '+' | '.join([safe(row.get('Symbol')),
+                safe(row.get('Name')),value,safe(row.get('SourceStatus')),
+                safe(row.get('MissingReason'))])+' |')
+    lines.append('')
+    lines.append('來源分層：正式 68/68 H9 Gate、發行人完整公司行動、Cash7 及送達證明均需獨立驗證。')
+    return '\n'.join(lines)+'\n'
+
 def build_partial(raw_dir:pathlib.Path,universe:list[str],out:pathlib.Path):
     """Emit a useful non-promotable fallback even when one raw symbol fails."""
     out.mkdir(parents=True,exist_ok=True)
@@ -176,6 +201,11 @@ def build_partial(raw_dir:pathlib.Path,universe:list[str],out:pathlib.Path):
     target.write_text(payload,encoding='utf8')
     if digest(target.read_bytes())!=digest(payload.encode('utf8')):
         raise RuntimeError('FALLBACK_REPORT_READBACK_SHA_MISMATCH')
+    readable=render_markdown(result)
+    human=out/'per_symbol_fallback.md'
+    human.write_text(readable,encoding='utf8')
+    if digest(human.read_bytes())!=digest(readable.encode('utf8')):
+        raise RuntimeError('FALLBACK_READABLE_REPORT_READBACK_SHA_MISMATCH')
     return result
 
 def selftest():
@@ -225,8 +255,24 @@ def selftest():
         p=root/'TPEX_20261013.json';x=json.loads(p.read_bytes());x['date']='20261012';p.write_text(json.dumps(x))
     run_case('bad_one_venue_keeps_67',corrupt_official,lambda r:r['OfficialPriorCloseCount']==67 and r['IndependentAdjustedSourceCount']==67)
     run_case('missing_receipt_is_explicit_hold',lambda root,u:(root/'acquisition_receipt.json').unlink(),lambda r:r['Status']=='HOLD_NO_SOURCE_RECEIPT' and r['TotalSymbols']==68)
-    run_case('stale_price_chart_is_held',lambda root,u:None,lambda r:r['SourceHolds']==0)
+    def stale_chart_with_consistent_receipt(root,uni):
+        # A stale source can have a valid raw SHA; verify actual market-day matching.
+        p=root/('chart_'+uni[0]+'.json')
+        doc=json.loads(p.read_bytes())
+        doc['chart']['result'][0]['timestamp'][-1]=int(dt.datetime(2026,10,12,13,30,tzinfo=TZ).timestamp())
+        payload=json.dumps(doc,ensure_ascii=False,sort_keys=True).encode('utf8')
+        p.write_bytes(payload)
+        receipt=root/'acquisition_receipt.json'
+        obj=json.loads(receipt.read_bytes())
+        for entry in obj['sources']:
+            if entry['path']==p.name:entry['sha256']=digest(payload)
+        receipt.write_text(json.dumps(obj))
+    run_case('stale_chart_with_valid_sha_held',stale_chart_with_consistent_receipt,
+             lambda r:r['IndependentAdjustedSourceCount']==67 and
+                      r['OfficialPriorCloseCount']==68 and
+                      r['Rows'][0]['MissingReason']=='PROVIDER_STALE_OR_DUPLICATE_OR_FUTURE_DAILY_BARS')
     run_case('no_forecast_numbers',None,lambda r:all(z['ModelPrediction'] is None for z in r['Rows']))
+    run_case('renderable_68_rows',None,lambda r:len([x for x in render_markdown(r).splitlines() if x.startswith('| ')])==69)
     run_case('firstparty_names_one_to_one',None,lambda r:r['Rows'][-1]['Name']=='示例2001' and r['Rows'][-1]['NameLineage']=='FIRST_PARTY_SAME_DAY')
     return {'status':'PASS' if all(v=='PASS' for v in tests.values()) else 'FAIL',
             'passed':sum(v=='PASS' for v in tests.values()),'total':len(tests),'tests':tests,
