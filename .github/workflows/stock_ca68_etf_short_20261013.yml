@@ -1,0 +1,49 @@
+name: stock-20261013-corporate-events-etf-short-research-qa
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-ca68-etf-short-20261013]
+    paths:
+      - '.github/workflows/stock_ca68_etf_short_20261013.yml'
+permissions:
+  contents: read
+concurrency:
+  group: stock-ca68-etf-one-shot-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  research-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm fail-closed parsers and short-history model synthetic tests
+        run: |
+          mkdir -p action_etf_qa
+          python -m py_compile scripts/stock_68_corporate_action_source_audit_20261013.py scripts/stock_short_etf_adaptive_shadow_20261013.py scripts/stock_twse_00400a_20261008_official_dividend_research.py
+          python scripts/stock_68_corporate_action_source_audit_20261013.py --self-test | tee action_etf_qa/action10.json
+          python scripts/stock_short_etf_adaptive_shadow_20261013.py --self-test | tee action_etf_qa/etf15.json
+          python scripts/stock_twse_00400a_20261008_official_dividend_research.py --self-test | tee action_etf_qa/twse6.json
+      - name: Capture exact primary TWSE official 00400A ex-dividend notice for independent check
+        continue-on-error: true
+        run: python scripts/stock_twse_00400a_20261008_official_dividend_research.py --output action_etf_qa/official_00400a
+      - name: Preserve source status, original bytes if fetched, and QA tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-ca68-etf-short-qa-${{ github.run_id }}
+          path: |
+            action_etf_qa/
+            scripts/stock_68_corporate_action_source_audit_20261013.py
+            scripts/stock_short_etf_adaptive_shadow_20261013.py
+            scripts/stock_twse_00400a_20261008_official_dividend_research.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Scope of release
+        if: always()
+        run: |
+          echo "Synthetic tests only in GitHub. Original 68-stock Yahoo source is in private Library and not uploaded." >> "$GITHUB_STEP_SUMMARY"
+          echo "One-off first-party event fetch is retrospective evidence; no formal model, actual brokerage or ChatGPT scheduled run is modified." >> "$GITHUB_STEP_SUMMARY"
+          echo "No Natural/OOS credit or issuer corporate-action exhaustiveness claim." >> "$GITHUB_STEP_SUMMARY"
