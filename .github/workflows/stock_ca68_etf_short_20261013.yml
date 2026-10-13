@@ -5,6 +5,7 @@ on:
     branches: [stock-ca68-etf-short-20261013]
     paths:
       - '.github/workflows/stock_ca68_etf_short_20261013.yml'
+      - 'scripts/stock_twse_00400a_20261008_official_dividend_research.py'
 permissions:
   contents: read
 concurrency:
