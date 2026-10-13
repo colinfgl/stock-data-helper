@@ -1,0 +1,92 @@
+name: stock-daily-nextsession-68-source-closure
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 12 * * 1-5'
+  push:
+    branches: [stock-daily-nextsession-source-20261013]
+    paths:
+      - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+      - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
+permissions:
+  contents: read
+concurrency:
+  group: stock-daily-source68-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source-gate-unit-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run source-window/date/quote-hash fail-closed self-tests
+        run: |
+          mkdir -p source_gate_qa
+          python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/15_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/15_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==15
+          assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
+          PY
+      - name: Preserve reusable unit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-daily-source68-gate-${{ github.run_id }}
+          path: |
+            source_gate_qa/
+            scripts/stock_daily_prior_close_source_closure_v1_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+  collect-next-session-source:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    needs: source-gate-unit-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source-only capture after Taipei close, ALL 68 codes
+        id: closure
+        continue-on-error: true
+        run: |
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --out stock_next_session_original_source --mode CAPTURE
+      - name: Preserve all raw original bytes and all failed-symbol receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-${{ github.run_id }}
+          path: |
+            stock_next_session_original_source/
+            stock_next_session_original_source_raw/
+            stock_next_session_original_source_calendar_source/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Gate exact 68 plus official bytes before claiming research source ready
+        if: always()
+        run: |
+          python - <<'PY'
+          import json,pathlib,sys
+          p=pathlib.Path('stock_next_session_original_source/model_input/source_closure_readback.json')
+          if not p.exists():
+              print('SOURCE68_NOT_READY: inspect uploaded per-symbol/hold files; never relabel old days')
+              sys.exit(2)
+          x=json.loads(p.read_bytes())
+          assert x['status']=='RESEARCH_SOURCE_68_OF_68_READY_NOT_FORMAL'
+          assert x['ticker_count']==x['per_symbol_sha_count']==68
+          assert x['formal_input_qualified']==False and x['natural_credit']==x['oos_credit']==0
+          print('RESEARCH_SOURCE_ONLY_READY; formal issuer/full H9 native forecast remains unqualified:',x['target_date'],x['source_date'])
+          PY
+      - name: Explicitly exclude production claims
+        if: always()
+        run: |
+          echo "Source-only GH helper after close, NOT a second formal ChatGPT schedule." >> "$GITHUB_STEP_SUMMARY"
+          echo "Only successful exact-date official 2+TAIEX and 68 separate provider SHA source rows qualify the research input pack." >> "$GITHUB_STEP_SUMMARY"
+          echo "Partial or stale provider source => fail job after preserving per-symbol status. No same-run ChatGPT ForecastSHA, formal/Natural/OOS or cash approval." >> "$GITHUB_STEP_SUMMARY"
