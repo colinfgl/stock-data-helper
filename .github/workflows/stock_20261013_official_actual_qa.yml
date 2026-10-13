@@ -1,7 +1,7 @@
 name: stock-20261013-official-actual-source-audit
 on:
   push:
-    branches: [stock-1013-official-actual-20261013]
+    branches: [stock-1013-official-actual-20261013, stock-official-ohlc-per-symbol-hold-20261013]
     paths:
       - 'scripts/stock_20261013_actual_official_v1.py'
       - '.github/workflows/stock_20261013_official_actual_qa.yml'
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Validate parser and 12 source guards
+      - name: Validate parser and 14 source guards
         run: |
           python -m py_compile scripts/stock_20261013_actual_official_v1.py
           mkdir -p stock_1013_official_actual
@@ -25,7 +25,7 @@ jobs:
           python - <<'PY'
           import json
           x=json.load(open('stock_1013_official_actual/selftest.json'))
-          assert x['Status']=='PASS' and x['Total']==x['Passed']==12,x
+          assert x['Status']=='PASS' and x['Total']==x['Passed']==14,x
           PY
       - name: Fetch public official TWSE and TPEx exact-day actual OHLC, no forecast write
         id: collect
@@ -41,6 +41,7 @@ jobs:
             echo "Current official actuals unavailable: see preserved source receipts, no fabricated closes." >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "Research postclose facts only; no mutation of existing ChatGPT 19:00 run or canonical Prediction/Outcome." >> "$GITHUB_STEP_SUMMARY"
+          echo "One symbol's OHLC integrity failure now yields one per-symbol HOLD; valid TWSE/TPEx siblings are not suppressed by one bad bar." >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve original byte evidence and readable 68-row report
         if: always()
         uses: actions/upload-artifact@v4

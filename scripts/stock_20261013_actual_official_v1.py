@@ -38,8 +38,12 @@ def parse_quotes(doc,venue,day):
             o,h,l,c=[price(row[j]) for j in ci[2:]]
             if any(z is None for z in (o,h,l,c)):
                 out[code]={'Name':name,'Status':'HOLD_MISSING_OHLC','Open':None,'High':None,'Low':None,'Close':None}
+            elif not (l<=min(o,c)<=max(o,c)<=h):
+                # Corrupt per-symbol quote must never erase valid siblings.
+                # Retain security identity; do not publish logically invalid prices.
+                out[code]={'Name':name,'Status':'HOLD_INVALID_OFFICIAL_OHLC_INVARIANT',
+                           'Open':None,'High':None,'Low':None,'Close':None}
             else:
-                need(l<=min(o,c)<=max(o,c)<=h,'OFFICIAL_OHLC_INVARIANT_'+code)
                 out[code]={'Name':name,'Status':'PASS_OFFICIAL_OHLC','Open':o,'High':h,'Low':l,'Close':c}
     need(found>0 and bool(out),'OFFICIAL_EMPTY_'+venue)
     return out
@@ -107,7 +111,17 @@ def selftest():
     test('wrong_venue_rejected',lambda:parse_quotes(tw,'TPEx',day),True)
     test('duplicate_symbol_rejected',lambda:parse_quotes(mutate(tw,lambda z:z['tables'][0]['data'].append(z['tables'][0]['data'][0][:])),'TWSE',day),True)
     test('missing_close_hold_only',lambda:parse_quotes(mutate(tw,lambda z:z['tables'][0]['data'][0].__setitem__(0,'--')),'TWSE',day)['2330']['Status']=='HOLD_MISSING_OHLC')
-    test('bad_price_bounds',lambda:parse_quotes(mutate(tw,lambda z:z['tables'][0]['data'][0].__setitem__(3,'99')),'TWSE',day),True)
+    test('bad_price_bounds_hold_only',lambda:parse_quotes(mutate(tw,lambda z:z['tables'][0]['data'][0].__setitem__(3,'99')),'TWSE',day)['2330']['Status']=='HOLD_INVALID_OFFICIAL_OHLC_INVARIANT')
+    def two_rows():
+        return mutate(tw,lambda z:z['tables'][0]['data'].append(['25','廣達','2382','26','24','23']))
+    test('one_inconsistent_one_good',lambda:(
+        lambda y:y['2330']['Status']=='HOLD_INVALID_OFFICIAL_OHLC_INVARIANT' and
+                 y['2382']['Status']=='PASS_OFFICIAL_OHLC' and y['2382']['Close']==25
+        )(parse_quotes(mutate(two_rows(),lambda z:z['tables'][0]['data'][0].__setitem__(3,'99')),'TWSE',day)))
+    test('one_non_numeric_one_good',lambda:(
+        lambda y:y['2330']['Status']=='HOLD_MISSING_OHLC' and
+                 y['2382']['Status']=='PASS_OFFICIAL_OHLC' and y['2382']['Close']==25
+        )(parse_quotes(mutate(two_rows(),lambda z:z['tables'][0]['data'][0].__setitem__(0,'--')),'TWSE',day)))
     test('missing_col_rejected',lambda:parse_quotes(mutate(tw,lambda z:z['tables'][0]['fields'].__setitem__(0,'unknown')),'TWSE',day),True)
     test('index_duplicate_date_rejected',lambda:parse_index(mutate(index,lambda z:z['data'].append(z['data'][0][:])),day),True)
     test('index_wrong_day_rejected',lambda:parse_index(mutate(index,lambda z:z.update(date='20261012')),day),True)
