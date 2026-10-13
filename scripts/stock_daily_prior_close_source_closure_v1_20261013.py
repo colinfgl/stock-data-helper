@@ -31,10 +31,21 @@ def next_session(base: dt.date, closed: set[dt.date], years: set[int]):
         target+=dt.timedelta(days=1)
 
 def runtime_day_gate(now: dt.datetime):
+    """Source session gate: same post-close evening or next preopen morning.
+
+    Only original *previous completed session* can be collected; a delayed
+    schedule/RECOVERY at 01:38 on 10/14 must resolve source day 10/13.
+    Do not allow new source ingestion after 08:09:30 premarket cutoff.
+    This is SOURCE RESEARCH only, never a natural same-run preopen seal.
+    """
     check(now.tzinfo is not None,'NAIVE_CLOCK_HOLD')
     z=now.astimezone(TZ)
-    check(dt.time(19,0)<=z.time()<dt.time(23,55),'AFTER_CLOSE_WINDOW_REQUIRED_19_TO_2355')
-    return z.date()
+    clock=z.time()
+    if dt.time(19,0)<=clock:
+        return z.date()
+    if clock<dt.time(8,9,30):
+        return z.date()-dt.timedelta(days=1)
+    raise ValueError('SOURCE_CAPTURE_OUTSIDE_POSTCLOSE_PREOPEN_WINDOW')
 
 def approved_universe():
     from stock_adjusted_20261013_source_closure import CODES
@@ -270,7 +281,12 @@ def selftest():
     tests['tw_tz_source']='PASS' if str(TZ)=='Asia/Taipei' else 'FAIL'
     tests['after_close_2045']='PASS' if runtime_day_gate(dt.datetime(2026,10,13,20,45,tzinfo=TZ))==base else 'FAIL'
     hold('reject_before_close',lambda:runtime_day_gate(dt.datetime(2026,10,13,12,30,tzinfo=TZ)))
-    hold('reject_after_midnight',lambda:runtime_day_gate(dt.datetime(2026,10,14,0,10,tzinfo=TZ)))
+    tests['after_midnight_0010_maps_prior_day']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,0,10,tzinfo=TZ))==base else 'FAIL'
+    tests['overnight_real_0138_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,1,38,tzinfo=TZ))==base else 'FAIL'
+    tests['morning_080929_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,8,9,29,tzinfo=TZ))==base else 'FAIL'
+    tests['midnight_0000_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,0,0,tzinfo=TZ))==base else 'FAIL'
+    hold('reject_at_exact_080930_cutoff',lambda:runtime_day_gate(dt.datetime(2026,10,14,8,9,30,tzinfo=TZ)))
+    hold('reject_185959_before_close',lambda:runtime_day_gate(dt.datetime(2026,10,13,18,59,59,tzinfo=TZ)))
     hold('reject_naive_clock',lambda:runtime_day_gate(dt.datetime(2026,10,13,20,45)))
     tests['source_sha64']='PASS' if re.fullmatch('[a-f0-9]{64}',sha(b'one')) else 'FAIL'
     tests['both_per_symbol_and_official_sha_required']='PASS' if any('SOURCE_INDEPENDENT_RAW_SHA_MISMATCH' in str(t) for t in build_h9_package.__code__.co_consts) else 'FAIL'
@@ -354,7 +370,7 @@ def main():
             check(nxt is not None,'NEXT_YEAR_OFFICIAL_CALENDAR_MISSING')
             payloads.append(nxt)
         closed,years=calendar_days(payloads);target=next_session(base,closed,years)
-        check(dt.datetime.now(TZ).time()>=dt.time(19,0),'BEFORE_MARKET_CLOSE')
+        check(runtime_day_gate(dt.datetime.now(dt.timezone.utc))==base,'SOURCE_DAY_WINDOW_CROSSED_OR_EXPIRED')
         if args.mode=='PREFLIGHT_ONLY':
             result=closure_report(out,'VALID_CALENDAR_AND_POST_CLOSE_WINDOW_ONLY',status='PASS_PRECHECK_SOURCE_NOT_FETCHED')
             result['last_closed_day']=str(base);result['target_date']=str(target)
