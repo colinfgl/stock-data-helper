@@ -42,6 +42,40 @@ def approved_universe():
     check(all(re.fullmatch(r'[A-Z0-9]{4,8}\.(TW|TWO)',s) for s in CODES),'BAD_TICKER')
     return CODES
 
+
+def validated_taiex_ohlc(document: dict, day: str) -> dict:
+    """Verify the original first-party monthly TWSE index OHLC contains exact target day."""
+    check(isinstance(document,dict),'TAIEX_PARENT_OBJECT_REQUIRED')
+    check(str(document.get('date'))==day and str(document.get('stat','')).lower()=='ok',
+          'TAIEX_PARENT_DATE_OR_STATUS')
+    required=('日期','開盤指數','最高指數','最低指數','收盤指數')
+    fields=document.get('fields')
+    check(isinstance(fields,list) and all(fields.count(k)==1 for k in required),
+          'TAIEX_OHLC_FIELDS_REQUIRED')
+    idx=[fields.index(k) for k in required]
+    check(isinstance(document.get('data'),list) and len(document['data'])>0,'TAIEX_OHLC_ROWS_EMPTY')
+    target=date8(day)
+    found=[]
+    for row in document['data']:
+        check(isinstance(row,list) and len(row)>max(idx),'TAIEX_OHLC_ROW_SCHEMA')
+        match=re.fullmatch(r'(\d{2,4})/(\d{1,2})/(\d{1,2})',str(row[idx[0]]).strip())
+        check(match is not None,'TAIEX_OHLC_ROC_DATE_BAD')
+        yy,mm,dd=map(int,match.groups())
+        this=dt.date(yy+1911 if yy<1911 else yy,mm,dd)
+        check(this<=target,'TAIEX_OHLC_FUTURE_DATE_LEAK')
+        if this==target:
+            check(not found,'TAIEX_OHLC_DUPLICATE_TARGET_DATE')
+            try:
+                o,h,l,cl=[float(str(row[k]).replace(',','')) for k in idx[1:]]
+            except (TypeError,ValueError,OverflowError) as exc:
+                raise ValueError('TAIEX_OHLC_NON_NUMERIC') from exc
+            check(all(math.isfinite(n) and n>0 for n in (o,h,l,cl)),
+                  'TAIEX_OHLC_NONFINITE_OR_NONPOSITIVE')
+            check(l<=min(o,cl)<=max(o,cl)<=h,'TAIEX_OHLC_PRICE_INVARIANT')
+            found.append({'open':o,'high':h,'low':l,'close':cl})
+    check(len(found)==1,'TAIEX_OHLC_EXACT_DAY_MISSING')
+    return found[0]
+
 def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, universe: list[str], output: pathlib.Path):
     """Require one independently SHA-verified chart per security plus firstparty quotes."""
     def official_quotes(obj, market, date):
@@ -71,12 +105,17 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         doc=json.loads(raw)
         check(str(doc.get('date'))==d,'OFFICIAL_DATE_NOT_PREVIOUS_SESSION_'+role)
         check(str(doc.get('stat','')).lower()=='ok','OFFICIAL_STATUS_NOT_OK_'+role)
+    taiex=validated_taiex_ohlc(json.loads(raws['ohlc']),d)
     quote={'TWSE':official_quotes(json.loads(raws['twse']),'TWSE',d),
            'TPEx':official_quotes(json.loads(raws['tpex']),'TPEX',d)}
     rt=folder/'acquisition_receipt.json';rr=json.loads(rt.read_bytes())
     check(rr['dates']['target_date']==target.isoformat(),'COLLECTOR_TARGET_MISMATCH')
     check(rr['dates']['price_cutoff']==d,'COLLECTOR_CUTOFF_MISMATCH')
-    check(all(v['status']=='PASS' for v in rr['official_validation'] if v['source'] in (f'TWSE_{d}.json',f'TPEX_{d}.json')),'NATIVE_OFFICIAL_QUOTE_QA_NOT_PASS')
+    required_sources={f'TWSE_{d}.json',f'TPEX_{d}.json','ohlc_raw.json'}
+    exact_receipts=[v for v in rr.get('official_validation',[]) if v.get('source') in required_sources]
+    check(len(exact_receipts)==3 and {v['source'] for v in exact_receipts}==required_sources and
+          all(v.get('status')=='PASS' for v in exact_receipts),
+          'OFFICIAL_TWSE_TPEX_TAIEX_VALIDATION_RECEIPTS_REQUIRED')
     entries=[];rawchart={}
     checked={r['symbol']:r for r in rr.get('charts',[]) if r.get('status')=='NATIVE_ADJUSTED_CROSSCHECK_PASS'}
     # The collector's own success status is strictly per original code/date; all 68
@@ -105,17 +144,24 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         source_rel='yahoo_raw/chart_'+ticker+'.json';rawchart[source_rel]=body
         original_receipt=next((x for x in rr.get('sources',[]) if x.get('path')==chk.name),None)
         check(original_receipt is not None and original_receipt.get('sha256')==sha(body),'SOURCE_INDEPENDENT_RAW_SHA_MISMATCH_'+ticker)
+        bar_asof=dt.datetime.fromtimestamp(timestamps[j],TZ)
+        check(bar_asof.date()==day,'PROVIDER_BAR_DATE_NOT_PRIOR_SESSION_'+ticker)
         entries.append({'code':code,'name':str(result[0]['meta'].get('shortName') or code),'venue':market,
           'ticker':ticker,'target_date':target.isoformat(),'source_cutoff_date':day.isoformat(),
           'provider_raw_sha256':sha(body),'provider_raw_file':source_rel,
-          'retrieved_at':original_receipt['retrieved_at'],'published_or_asof':day.isoformat()+' 13:30 Asia/Taipei',
+          'retrieved_at':original_receipt['retrieved_at'],
+          'published_or_asof':bar_asof.strftime('%Y-%m-%d %H:%M Asia/Taipei'),
+          'provider_bar_asof_basis':'YAHOO_ORIGINAL_BAR_TIMESTAMP_NOT_INDEPENDENT_PUBLICATION_TIME',
           'corporate_action_exhaustive':'UNVERIFIED','official_close':float(official_close),
           'formal_input_qualified':False,'natural_credit':0,'oos_credit':0})
     check(len(entries)==68 and len({r['provider_raw_sha256'] for r in entries})==68,'INDEPENDENT_SOURCE_CLOSURE_FAIL')
+    all_original_shas={r['provider_raw_sha256'] for r in entries}|{sha(v) for v in raws.values()}
+    check(len(all_original_shas)==71,'SOURCES_68_PLUS_3_SHA_UNIQUENESS_FAIL')
     index={'authoritative_target':target.isoformat(),'source_cutoff':day.isoformat(),
       'data_generation_timestamp_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
       'official_original_shas':{k:sha(v) for k,v in raws.items()},
-      'rows':entries,'manifest_version':'STOCK-DAILY-SOURCE-68-v1','source_qualification':'RESEARCH_ONLY',
+      'rows':entries,'manifest_version':'STOCK-DAILY-SOURCE-68-v1.1-OHLC-RAW-PROVENANCE',
+      'official_taiex_ohlc':taiex,'source_qualification':'RESEARCH_ONLY',
       'corporate_action_gate':'ISSUER_ALL_ACTIONS_NOT_EXHAUSTIVE','formal_input_qualified':False,
       'forecast_generated':False,'cash_changed':False,'natural_credit':0,'oos_credit':0}
     output.mkdir(parents=True,exist_ok=False)
@@ -128,7 +174,8 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
       'source_date':day.isoformat(),'ticker_count':68,'per_symbol_sha_count':len(entries),
       'official_primary_count':2,'TAIEX_INDEX_PARENT_SHA':index['official_original_shas']['ohlc'],
       'package_sha256':sha(target_zip.read_bytes()),'source_index_sha256':sha((output/'h9_source_index.json').read_bytes()),
-      'total_unique_original_raw_shas':len({x['provider_raw_sha256'] for x in entries})+3,
+      'total_unique_original_raw_shas':len(all_original_shas),
+      'taiex_ohlc_verified':True,'taiex_ohlc':taiex,
       'formal_input_qualified':False,'formal_forecast_written':False,'natural_credit':0,'oos_credit':0,
       'limitation':'Corporate action MOPS exhaustive, formal Model/Config same-run seal, and market-day source original approval still required.'}
     (output/'source_closure_readback.json').write_text(json.dumps(status,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
@@ -168,6 +215,20 @@ def selftest():
     tests['strict_source_day']='PASS' if 'SOURCE_CUTOFF_STALE_' in build_h9_package.__code__.co_consts else 'FAIL'
     tests['no_production_path']='PASS' if closure_report.__name__=='closure_report' else 'FAIL'
     tests['no_scheduled_stock_task_creation']='PASS' if 'TaskID' not in __doc__ else 'FAIL'
+    fx={'date':'20261013','stat':'OK','fields':['日期','開盤指數','最高指數','最低指數','收盤指數'],
+        'data':[['115/10/13','100','105','95','102']]}
+    tests['exact_taiex_parent_positive']='PASS' if validated_taiex_ohlc(fx,'20261013')['close']==102 else 'FAIL'
+    def probe_ohlc(modifier):
+        x=json.loads(json.dumps(fx));modifier(x)
+        return validated_taiex_ohlc(x,'20261013')
+    hold('reject_missing_taiex_date',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(0,'115/10/12')))
+    hold('reject_malformed_taiex_date',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(0,'115/99/13')))
+    hold('reject_taiex_duplicate_date',lambda:probe_ohlc(lambda x:x['data'].append(x['data'][0].copy())))
+    hold('reject_future_taiex_row',lambda:probe_ohlc(lambda x:x['data'].append(['115/10/14','100','105','95','102'])))
+    hold('reject_high_lower_than_close',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(2,'90')))
+    hold('reject_close_outside_high_low',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(4,'110')))
+    hold('reject_nan_taiex',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(1,'NaN')))
+    hold('reject_missing_taiex_field',lambda:probe_ohlc(lambda x:x['fields'].__setitem__(4,'未知欄位')))
     return {'status':'PASS' if all(v=='PASS' for v in tests.values()) else 'FAIL',
             'passed':sum(v=='PASS' for v in tests.values()),'total':len(tests),'cases':tests,
             'scope':'PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'}
