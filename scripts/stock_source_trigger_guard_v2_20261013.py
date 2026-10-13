@@ -286,6 +286,9 @@ def main():
     if gh_output:
         with open(gh_output,"a",encoding="utf8") as handle:
             handle.write("should_collect=" + ("true" if result["should_collect"] else "false") + "\n")
+            if result["should_collect"]:
+                verified_day=dt.date.fromisoformat(result["session"]).strftime("%Y%m%d")
+                handle.write("source_day=" + verified_day + "\n")
     print(json.dumps({k:result[k] for k in ("should_collect","reason","checked_at_utc")},ensure_ascii=False))
     return 0
 
