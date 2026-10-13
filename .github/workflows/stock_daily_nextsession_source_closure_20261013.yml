@@ -14,6 +14,7 @@ on:
       - 'scripts/premarket_daily_inputs_3y_20261013.py'
       - 'scripts/stock_network_partial_retry_guard_20261013.py'
       - 'scripts/stock_dual_origin_prior_close_research_v1_20261013.py'
+      - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
 permissions:
   contents: read
   actions: read
@@ -90,6 +91,16 @@ jobs:
           assert x['status']=='PASS' and x['passed']==x['total']==10,x
           assert x['scope']=='PURE_SYNTHETIC_TWO_RAW_SOURCES_NO_FORMAL'
           PY
+      - name: Validate 12 exact-date missing-14 TAIEX research guards
+        run: |
+          python -m py_compile scripts/stock_taiex_14gap_research_v1_20261013.py
+          python scripts/stock_taiex_14gap_research_v1_20261013.py --self-test > source_gate_qa/taiex14_12_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/taiex14_12_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==12,x
+          assert x['scope']=='SYNTHETIC_OFFICIAL_INDEX_NO_CASH_NO_FORMAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,6 +114,7 @@ jobs:
             scripts/premarket_daily_inputs_3y_20261013.py
             scripts/stock_network_partial_retry_guard_20261013.py
             scripts/stock_dual_origin_prior_close_research_v1_20261013.py
+            scripts/stock_taiex_14gap_research_v1_20261013.py
           retention-days: 30
           if-no-files-found: error
   collect-next-session-source:
@@ -239,6 +251,21 @@ jobs:
             --out stock_next_session_original_source/dual_origin_research
           if [ -f stock_next_session_original_source/dual_origin_research/dual_original_research_68.md ]; then
             cat stock_next_session_original_source/dual_origin_research/dual_original_research_68.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve 14 missing H9 historical index dates from official two-month originals
+        if: always()
+        continue-on-error: true
+        run: |
+          oct='stock_next_session_original_source_raw/ohlc_raw.json'
+          if [ ! -f "$oct" ]; then
+            echo 'H9_RESEARCH_INDEX14_HOLD: Oct firstparty original absent; preserve all other source receipts'
+            exit 0
+          fi
+          python scripts/stock_taiex_14gap_research_v1_20261013.py \
+            --oct-raw "$oct" \
+            --out stock_next_session_original_source/taiex_historical_gap14
+          if [ -f stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md ]; then
+            cat stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Preserve all raw original bytes and all failed-symbol receipts
         if: always()
