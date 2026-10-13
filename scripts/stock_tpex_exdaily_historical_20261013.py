@@ -41,7 +41,7 @@ def parse_original(raw,begin,end):
     for r in rows:
         if not isinstance(r,(list,tuple)) or len(r)<9:raise ValueError('ROW_SCHEMA_SHORT')
         date=parse_roc_date(str(r[0]));code=str(r[1]).strip();kind=str(r[8]).strip()
-        if not re.fullmatch(r'\d{4,6}',code):raise ValueError('STOCK_CODE_INVALID:'+code)
+        if not re.fullmatch(r'[0-9A-Z]{4,6}',code):raise ValueError('STOCK_CODE_INVALID:'+code)
         if not(begin<=date<=end):bad.append(date);continue
         key=(date,code,kind)
         if key in keys:raise ValueError('DUPLICATE_DATE_CODE_EVENT')
@@ -69,6 +69,7 @@ def selftest():
     run('duplicate_event',lambda:parse_original(json.dumps({'aaData':rows*2}).encode(),'2026-09-01','2026-09-30'),False)
     run('empty_data',lambda:parse_original(b'{"aaData":[]}', '2026-09-01','2026-09-30'),False)
     run('html_fallback',lambda:parse_original(b'<html></html>','2026-09-01','2026-09-30'),False)
+    run('alpha_numeric_etf_symbol',lambda:parse_original(json.dumps({'aaData':[rows[0][:1]+['00950B']+rows[0][2:]]}).encode(),'2026-09-01','2026-09-30'))
     run('bad_symbol',lambda:parse_original(json.dumps({'aaData':[rows[0][:1]+['NOT_STOCK']+rows[0][2:]]}).encode(),'2026-09-01','2026-09-30'),False)
     run('urls_distinct',lambda:(_ for _ in ()).throw(AssertionError('urls')) if len(set(source_urls(*WINDOWS[1])))!=3 else None)
     assert all(tests.values()),tests
