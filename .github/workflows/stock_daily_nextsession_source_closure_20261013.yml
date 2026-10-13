@@ -8,7 +8,7 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-source-cross-midnight-20261014]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -39,11 +39,11 @@ jobs:
         run: |
           mkdir -p source_gate_qa
           python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py
-          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/35_tests.json
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/40_tests.json
           python - <<'PY'
           import json
-          x=json.load(open('source_gate_qa/35_tests.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==35
+          x=json.load(open('source_gate_qa/40_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==40
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
           PY
       - name: Validate optional dividend-factor research helper independently
@@ -139,6 +139,7 @@ jobs:
     timeout-minutes: 4
     outputs:
       should_collect: ${{ steps.prove.outputs.should_collect }}
+      source_day: ${{ steps.prove.outputs.source_day }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -160,7 +161,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
   collect-next-session-source:
-    if: ${{ always() && needs.source-gate-unit-qa.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && needs.source-recovery-decision.outputs.should_collect == 'true')) }}
+    if: ${{ always() && needs.source-gate-unit-qa.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && needs.source-recovery-decision.outputs.should_collect == 'true') || (github.event_name == 'push' && github.ref == 'refs/heads/stock-source-cross-midnight-20261014')) }}
     needs: [source-gate-unit-qa, source-recovery-decision]
     runs-on: ubuntu-latest
     timeout-minutes: 29
@@ -169,11 +170,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Source-only capture after Taipei close, ALL 68 codes
+      - name: Source-only capture after Taipei close or before next session PRECHECK, ALL 68 codes
         id: closure
         continue-on-error: true
+        env:
+          VALIDATED_RECOVERY_SOURCE_DAY: ${{ needs.source-recovery-decision.outputs.source_day }}
+          RUN_TRIGGER_EVENT: ${{ github.event_name }}
         run: |
-          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --out stock_next_session_original_source --mode CAPTURE
+          # Normal schedule uses verified local source-time gate; delayed
+          # workflow_run uses the EXACT source session from readback decision.
+          if [ "$RUN_TRIGGER_EVENT" = 'workflow_run' ]; then
+            if ! [[ "$VALIDATED_RECOVERY_SOURCE_DAY" =~ ^[0-9]{8}$ ]]; then
+              echo 'RECOVERY_SOURCE_DAY_UNVERIFIED_HOLD'
+              exit 2
+            fi
+            python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --out stock_next_session_original_source --mode CAPTURE --day "$VALIDATED_RECOVERY_SOURCE_DAY"
+          else
+            python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --out stock_next_session_original_source --mode CAPTURE
+          fi
       - name: Optional source-chart dividend-factor audit, nonblocking
         if: always()
         continue-on-error: true
@@ -257,16 +271,28 @@ jobs:
                   dest.write((output/'short_history_research_proxy.md').read_text(encoding='utf8'))
                   dest.write('\nNote: target 08:09:30 is only the prospective input eligibility boundary. It is NOT a ChatGPT PRECHECK_START/RunID/ForecastSHA seal.\n')
           PY
-      - name: Classify 10-13 historical Yahoo regression scope only
+      - name: Classify 10-13 historical Yahoo regression by verified source session, not machine midnight
         if: always()
         id: archive_scope
+        env:
+          VERIFIED_RECOVERY_SOURCE_DAY: ${{ needs.source-recovery-decision.outputs.source_day }}
+          RUN_TRIGGER_EVENT: ${{ github.event_name }}
         run: |
-          localday=$(TZ=Asia/Taipei date +%Y%m%d)
-          if [ "$localday" = '20261013' ]; then
+          source_day=$(PYTHONPATH=scripts python - <<'PY' || true
+          import datetime
+          from stock_daily_prior_close_source_closure_v1_20261013 import runtime_day_gate
+          try:
+              print(runtime_day_gate(datetime.datetime.now(datetime.timezone.utc)).strftime('%Y%m%d'))
+          except ValueError:
+              print('SOURCE_DATE_WINDOW_HOLD')
+          PY
+          )
+          echo 'use_older_original=false' >> "$GITHUB_OUTPUT"
+          if [ "$RUN_TRIGGER_EVENT" = 'workflow_run' ] && [ "$source_day" != "$VERIFIED_RECOVERY_SOURCE_DAY" ]; then
+            echo "RECOVERY_SOURCE_DAY_MISMATCH_HOLD"
+          elif [ "$source_day" = '20261013' ]; then
             echo 'use_older_original=true' >> "$GITHUB_OUTPUT"
-            echo 'Only 20261013 exact-day research bridge will fetch one old immutable artifact.'
-          else
-            echo 'use_older_original=false' >> "$GITHUB_OUTPUT"
+            echo 'PIT research old original eligible by verified SOURCE date 20261013 (may execute after midnight).'
           fi
       - name: Read 10-12 original Yahoo bytes from pinned prior GitHub artifact
         if: steps.archive_scope.outputs.use_older_original == 'true'
@@ -360,3 +386,4 @@ jobs:
           echo "Read verified_partial/per_symbol_fallback.md in the scheduled job summary for a complete Traditional Chinese per-symbol readout; delivery to ChatGPT is a separate not-yet-proven platform stage." >> "$GITHUB_STEP_SUMMARY"
           echo "00400A/009820/3718 statistical D1-D10 sidecar uses 20+ legal adjusted bars and official prior close, not original H9: no canonical prediction write, calibrated interval claim, Formal/Natural/OOS or executable order." >> "$GITHUB_STEP_SUMMARY"
           echo "Partial TWSE/TPEx HTTP bodies fail closed, save bounded original partial proof, and permit only one fresh retry. Synthetic HTTP fixture success does not qualify an actual symbol." >> "$GITHUB_STEP_SUMMARY"
+          echo "Cross-midnight source date is bound to verified prior completed market day, never to next morning machine date; 08:09:30 cutoff enforced and old 10/12 original loaded for 10/13 source day only. All are RESEARCH, not Formal/Natural/OOS." >> "$GITHUB_STEP_SUMMARY"
