@@ -1,0 +1,46 @@
+name: stock-20261014-governed-release-candidate-qa
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-next-day-governed-release-gates-20261013]
+    paths:
+      - '.github/workflows/stock_1014_governed_release_gate_20261013.yml'
+      - 'scripts/stock_release_1014_governed_gate_v1_20261013.py'
+permissions:
+  contents: read
+jobs:
+  fail-closed-next-day-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate syntax and run 27 positive/negative safety cases
+        run: |
+          mkdir -p governed_release_qa
+          python -m py_compile scripts/stock_release_1014_governed_gate_v1_20261013.py
+          python scripts/stock_release_1014_governed_gate_v1_20261013.py --self-test --out governed_release_qa/selftest.json >/dev/null
+          python - <<'PY'
+          import json
+          x=json.load(open('governed_release_qa/selftest.json'))
+          assert x['status']=='PASS' and x['total']==x['passed']==27
+          assert x['scope']=='PURE_SYNTHETIC_NO_PRIVATE_INPUT_NO_MODEL_CHANGE_NO_NATIVE_WRITE'
+          PY
+      - name: Save immutable program and test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-nextday-governance-27qa-${{ github.run_id }}
+          path: |
+            governed_release_qa/selftest.json
+            scripts/stock_release_1014_governed_gate_v1_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Truthful scope
+        if: always()
+        run: |
+          echo "Generic public release safety validator, not a promotion action." >> "$GITHUB_STEP_SUMMARY"
+          echo "No user holdings, private raw quotes, native Sheets, real scheduled task prompts, Config or cash touched." >> "$GITHUB_STEP_SUMMARY"
+          echo "10/14 cannot be PRESEALED before true 10/13 19:00 FINAL and readback." >> "$GITHUB_STEP_SUMMARY"
