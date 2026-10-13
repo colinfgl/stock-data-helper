@@ -4,11 +4,12 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
       - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
+      - 'scripts/stock_partial_source_fallback_v1_20261013.py'
 permissions:
   contents: read
 concurrency:
@@ -44,6 +45,16 @@ jobs:
           assert a["status"]=="PASS" and a["passed"]==a["total"]==15,a
           assert a["scope"]=="SYNTHETIC_NO_PRIVATE_INPUT_NO_FORMAL"
           PY
+      - name: Validate 10 independent per-symbol fallback guards
+        run: |
+          python -m py_compile scripts/stock_partial_source_fallback_v1_20261013.py
+          python scripts/stock_partial_source_fallback_v1_20261013.py --self-test > source_gate_qa/partial10_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/partial10_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==10,x
+          assert x['scope']=='SYNTHETIC_RESEARCH_ONLY_NO_FORMAL_NO_NATURAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,6 +63,7 @@ jobs:
           path: |
             source_gate_qa/
             scripts/stock_daily_prior_close_source_closure_v1_20261013.py
+            scripts/stock_partial_source_fallback_v1_20261013.py
           retention-days: 30
           if-no-files-found: error
   collect-next-session-source:
@@ -103,6 +115,11 @@ jobs:
           print("SIDE_CAR:",report["Status"],"charts",len(records),
                 "excluded dividend events",report["ThresholdExcludedEvents"])
           PY
+      - name: Save 68-code verified partial market evidence independently
+        if: always()
+        continue-on-error: true
+        run: |
+          python scripts/stock_partial_source_fallback_v1_20261013.py --raw-dir stock_next_session_original_source_raw --output stock_next_session_original_source/verified_partial
       - name: Preserve all raw original bytes and all failed-symbol receipts
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,3 +159,4 @@ jobs:
           echo "Symbol display names are from the same original first-party TWSE/TPEx file; Yahoo English shortName remains audit-only." >> "$GITHUB_STEP_SUMMARY"
           echo "Partial or stale provider source => fail job after preserving per-symbol status. No same-run ChatGPT ForecastSHA, formal/Natural/OOS or cash approval." >> "$GITHUB_STEP_SUMMARY"
           echo "Dividend-factor chart reconciliation is a separate nonblocking research sidecar; an eligible 68-source manifest is still determined only by the original hard gate." >> "$GITHUB_STEP_SUMMARY"
+          echo "Independent per-symbol fallback preserves official name/close for valid symbols even when 1/68 adjusted chart fails. It supplies NO H9 model price for unqualified symbols and NO Formal/Natural/OOS credit." >> "$GITHUB_STEP_SUMMARY"
