@@ -216,6 +216,38 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         for filename,raw in rawchart.items():check(sha(zp.read(filename))==sha(raw),'PACK_CHART_BYTES_DRIFT_'+filename)
     return status
 
+def bind_calendar_to_source_index(pack:pathlib.Path,outer:pathlib.Path,original_sha:str,status:dict):
+    """Bind the exact official calendar parent to H9 index and both closure receipts."""
+    check(isinstance(original_sha,str) and re.fullmatch(r'[0-9a-f]{64}',original_sha),
+          'CALENDAR_SHA256_REQUIRED')
+    indexfile=pack/'h9_source_index.json'
+    index=json.loads(indexfile.read_bytes())
+    check(index.get('source_qualification')=='RESEARCH_ONLY' and
+          index.get('formal_input_qualified') is False and
+          index.get('corporate_action_gate')=='ISSUER_ALL_ACTIONS_NOT_EXHAUSTIVE',
+          'CALENDAR_SOURCE_GOVERNANCE_CONFLICT')
+    entries=index.get('rows')
+    check(isinstance(entries,list) and len(entries)==68 and
+          len({r['code'] for r in entries})==68,'CALENDAR_SOURCE_UNIVERSE_NOT_68')
+    check(index.get('official_calendar_sha256') in (None,original_sha),
+          'CALENDAR_ORIGINAL_SHA_CONFLICT')
+    check(status.get('source_index_sha256')==sha(indexfile.read_bytes()),
+          'SOURCE_INDEX_BEFORE_CALENDAR_SHA_CONFLICT')
+    index['official_calendar_sha256']=original_sha
+    buffer=json.dumps(index,ensure_ascii=False,indent=2,allow_nan=False).encode('utf8')+b'\n'
+    indexfile.write_bytes(buffer)
+    out=dict(status)
+    out['source_index_sha256']=sha(buffer)
+    out['official_calendar_sha256']=original_sha
+    frozen=json.dumps(out,ensure_ascii=False,indent=2,allow_nan=False).encode('utf8')+b'\n'
+    (pack/'source_closure_readback.json').write_bytes(frozen)
+    (outer/'source_closure_readback.json').write_bytes(frozen)
+    check((pack/'source_closure_readback.json').read_bytes()==frozen and
+          (outer/'source_closure_readback.json').read_bytes()==frozen and
+          sha(indexfile.read_bytes())==out['source_index_sha256'],
+          'CALENDAR_SOURCE_READBACK_CONFLICT')
+    return out
+
 def closure_report(out,reason,status='HOLD_SOURCE_NOT_READY'):
     out.mkdir(parents=True,exist_ok=True)
     x={'status':status,'reason':reason,'asof_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -276,6 +308,26 @@ def selftest():
     hold('reject_wrong_official_name_date',lambda:with_bad_name(lambda x:x.update(date='20261012')))
     hold('reject_duplicated_name_column',lambda:with_bad_name(lambda x:x['tables'][0]['fields'].__setitem__(2,'證券名稱')))
     hold('reject_official_name_rows_empty',lambda:with_bad_name(lambda x:x['tables'][0].update(data=[])))
+    import tempfile
+    with tempfile.TemporaryDirectory() as path:
+        root=pathlib.Path(path);package=root/'model_input';package.mkdir()
+        idx=package/'h9_source_index.json'
+        sample={'source_qualification':'RESEARCH_ONLY','formal_input_qualified':False,
+          'corporate_action_gate':'ISSUER_ALL_ACTIONS_NOT_EXHAUSTIVE',
+          'rows':[{'code':f'{x:04d}'} for x in range(68)]}
+        idx.write_text(json.dumps(sample)+'\n',encoding='utf8')
+        old={'source_index_sha256':sha(idx.read_bytes()),'natural_credit':0,'oos_credit':0}
+        marker=sha(b'original firstparty official calendar bytes')
+        new=bind_calendar_to_source_index(package,root,marker,old)
+        a=json.loads(idx.read_bytes())
+        tests['calendar_sha_in_h9_source_index']='PASS' if (
+          a['official_calendar_sha256']==marker and
+          new['source_index_sha256']==sha(idx.read_bytes())) else 'FAIL'
+        tests['identical_top_and_nested_calendar_receipts']='PASS' if (
+          (package/'source_closure_readback.json').read_bytes()==
+          (root/'source_closure_readback.json').read_bytes()) else 'FAIL'
+        hold('reject_invalid_official_calendar_sha',
+          lambda:bind_calendar_to_source_index(package,root,'invalid',new))
     return {'status':'PASS' if all(v=='PASS' for v in tests.values()) else 'FAIL',
             'passed':sum(v=='PASS' for v in tests.values()),'total':len(tests),'cases':tests,
             'scope':'PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'}
@@ -319,8 +371,9 @@ def main():
         check(sum(row['status']=='NATIVE_ADJUSTED_CROSSCHECK_PASS' for row in statuses)==68,'SOME_SYMBOLS_SOURCE_HOLD_REVIEW_PER_SYMBOL_COVERAGE')
         # Internal package builder expects a fresh output path to avoid overwrites.
         packout=out/'model_input';status=build_h9_package(collected,target,base,approved_universe(),packout)
-        status['official_calendar_sha256']=fetch_meta['sha256']
-        (out/'source_closure_readback.json').write_text(json.dumps(status,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+        status=bind_calendar_to_source_index(packout,out,fetch_meta['sha256'],status)
+        check((out/'source_closure_readback.json').read_bytes()==(packout/'source_closure_readback.json').read_bytes(),
+              'CALENDAR_SOURCE_TOP_NESTED_READBACK_DRIFT')
         print(json.dumps(status,ensure_ascii=False));return 0
     except Exception as e:
         hold=closure_report(out,str(e)[:320]);print(json.dumps(hold,ensure_ascii=False));return 2
