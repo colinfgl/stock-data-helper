@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -26,11 +26,11 @@ jobs:
         run: |
           mkdir -p source_gate_qa
           python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py
-          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/15_tests.json
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/24_tests.json
           python - <<'PY'
           import json
-          x=json.load(open('source_gate_qa/15_tests.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==15
+          x=json.load(open('source_gate_qa/24_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==24
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
           PY
       - name: Preserve reusable unit evidence
@@ -81,6 +81,9 @@ jobs:
           x=json.loads(p.read_bytes())
           assert x['status']=='RESEARCH_SOURCE_68_OF_68_READY_NOT_FORMAL'
           assert x['ticker_count']==x['per_symbol_sha_count']==68
+          assert x['taiex_ohlc_verified'] is True
+          assert set(x['taiex_ohlc'])=={'open','high','low','close'}
+          assert x['total_unique_original_raw_shas']==71
           assert x['formal_input_qualified']==False and x['natural_credit']==x['oos_credit']==0
           print('RESEARCH_SOURCE_ONLY_READY; formal issuer/full H9 native forecast remains unqualified:',x['target_date'],x['source_date'])
           PY
@@ -88,5 +91,6 @@ jobs:
         if: always()
         run: |
           echo "Source-only GH helper after close, NOT a second formal ChatGPT schedule." >> "$GITHUB_STEP_SUMMARY"
-          echo "Only successful exact-date official 2+TAIEX and 68 separate provider SHA source rows qualify the research input pack." >> "$GITHUB_STEP_SUMMARY"
+          echo "Successful exact-day TWSE+TPEx and verified TAIEX O/H/L/C plus 68 separate Yahoo SHA sources are required; green push CI is only synthetic QA." >> "$GITHUB_STEP_SUMMARY"
+          echo "Provider bar asof uses original timestamp rather than a fabricated 13:30 publication timestamp." >> "$GITHUB_STEP_SUMMARY"
           echo "Partial or stale provider source => fail job after preserving per-symbol status. No same-run ChatGPT ForecastSHA, formal/Natural/OOS or cash approval." >> "$GITHUB_STEP_SUMMARY"
