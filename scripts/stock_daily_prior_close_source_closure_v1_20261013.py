@@ -76,6 +76,27 @@ def validated_taiex_ohlc(document: dict, day: str) -> dict:
     check(len(found)==1,'TAIEX_OHLC_EXACT_DAY_MISSING')
     return found[0]
 
+def official_names(obj, market, date):
+    check(str(obj.get('date'))==date and str(obj.get('stat','')).lower()=='ok',
+          'OFFICIAL_NAME_DATE_OR_STATUS_INVALID_'+market)
+    symbol_col,name_col=('證券代號','證券名稱') if market=='TWSE' else ('代號','名稱')
+    names={};matched=0
+    for block in obj.get('tables',[]):
+        fields=block.get('fields') or []
+        if symbol_col not in fields:continue
+        check(fields.count(symbol_col)==1 and fields.count(name_col)==1,
+              'OFFICIAL_NAME_FIELDS_AMBIGUOUS_'+market)
+        ci=fields.index(symbol_col);ni=fields.index(name_col);matched+=1
+        for row in block.get('data',[]):
+            check(isinstance(row,list) and len(row)>max(ci,ni),
+                  'OFFICIAL_NAME_ROW_SCHEMA_'+market)
+            code=str(row[ci]).strip();name=str(row[ni]).strip()
+            check(bool(code and name) and name.lower() not in ('none','null','nan'),
+                  'OFFICIAL_NAME_EMPTY_'+market)
+            check(code not in names,'OFFICIAL_DUPLICATE_NAMED_SYMBOL_'+market+'_'+code)
+            names[code]=name
+    check(matched>0 and bool(names),'OFFICIAL_NAME_TABLE_MISSING_'+market)
+    return names
 def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, universe: list[str], output: pathlib.Path):
     """Require one independently SHA-verified chart per security plus firstparty quotes."""
     def official_quotes(obj, market, date):
@@ -106,6 +127,8 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         check(str(doc.get('date'))==d,'OFFICIAL_DATE_NOT_PREVIOUS_SESSION_'+role)
         check(str(doc.get('stat','')).lower()=='ok','OFFICIAL_STATUS_NOT_OK_'+role)
     taiex=validated_taiex_ohlc(json.loads(raws['ohlc']),d)
+    names={'TWSE':official_names(json.loads(raws['twse']),'TWSE',d),
+           'TPEx':official_names(json.loads(raws['tpex']),'TPEx',d)}
     quote={'TWSE':official_quotes(json.loads(raws['twse']),'TWSE',d),
            'TPEx':official_quotes(json.loads(raws['tpex']),'TPEX',d)}
     rt=folder/'acquisition_receipt.json';rr=json.loads(rt.read_bytes())
@@ -141,12 +164,17 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         close=quote_rows[j]; adj=adjrows[j]
         check(isinstance(close,(int,float)) and isinstance(adj,(int,float)) and close>0 and adj>0,'CHART_CLOSE_MISSING_'+ticker)
         check(abs(close-official_close)<max(0.011,official_close*.00002),'OFFICIAL_YAHOO_CLOSE_MISMATCH_'+ticker)
+        official_name=names[market].get(code)
+        check(isinstance(official_name,str) and bool(official_name.strip()),
+              'OFFICIAL_NAME_MISSING_FOR_UNIVERSE_'+ticker)
         source_rel='yahoo_raw/chart_'+ticker+'.json';rawchart[source_rel]=body
         original_receipt=next((x for x in rr.get('sources',[]) if x.get('path')==chk.name),None)
         check(original_receipt is not None and original_receipt.get('sha256')==sha(body),'SOURCE_INDEPENDENT_RAW_SHA_MISMATCH_'+ticker)
         bar_asof=dt.datetime.fromtimestamp(timestamps[j],TZ)
         check(bar_asof.date()==day,'PROVIDER_BAR_DATE_NOT_PRIOR_SESSION_'+ticker)
-        entries.append({'code':code,'name':str(result[0]['meta'].get('shortName') or code),'venue':market,
+        entries.append({'code':code,'name':official_name,'venue':market,
+          'official_name_source':'NATIVE_EXACT_DATE_'+market,
+          'provider_short_label_for_audit':str(result[0]['meta'].get('shortName') or ''),
           'ticker':ticker,'target_date':target.isoformat(),'source_cutoff_date':day.isoformat(),
           'provider_raw_sha256':sha(body),'provider_raw_file':source_rel,
           'retrieved_at':original_receipt['retrieved_at'],
@@ -160,7 +188,8 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
     index={'authoritative_target':target.isoformat(),'source_cutoff':day.isoformat(),
       'data_generation_timestamp_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
       'official_original_shas':{k:sha(v) for k,v in raws.items()},
-      'rows':entries,'manifest_version':'STOCK-DAILY-SOURCE-68-v1.1-OHLC-RAW-PROVENANCE',
+      'rows':entries,'manifest_version':'STOCK-DAILY-SOURCE-68-v1.2-OFFICIAL-NAMES',
+      'all_names_from_official':True,
       'official_taiex_ohlc':taiex,'source_qualification':'RESEARCH_ONLY',
       'corporate_action_gate':'ISSUER_ALL_ACTIONS_NOT_EXHAUSTIVE','formal_input_qualified':False,
       'forecast_generated':False,'cash_changed':False,'natural_credit':0,'oos_credit':0}
@@ -176,6 +205,7 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
       'package_sha256':sha(target_zip.read_bytes()),'source_index_sha256':sha((output/'h9_source_index.json').read_bytes()),
       'total_unique_original_raw_shas':len(all_original_shas),
       'taiex_ohlc_verified':True,'taiex_ohlc':taiex,
+      'full_official_symbol_names':True,
       'formal_input_qualified':False,'formal_forecast_written':False,'natural_credit':0,'oos_credit':0,
       'limitation':'Corporate action MOPS exhaustive, formal Model/Config same-run seal, and market-day source original approval still required.'}
     (output/'source_closure_readback.json').write_text(json.dumps(status,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
@@ -229,6 +259,23 @@ def selftest():
     hold('reject_close_outside_high_low',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(4,'110')))
     hold('reject_nan_taiex',lambda:probe_ohlc(lambda x:x['data'][0].__setitem__(1,'NaN')))
     hold('reject_missing_taiex_field',lambda:probe_ohlc(lambda x:x['fields'].__setitem__(4,'未知欄位')))
+    names_obj={'date':'20261013','stat':'OK','tables':[{'fields':['證券代號','證券名稱','收盤價'],
+        'data':[['2330','台積電','2540'],['0050','元大台灣50','114.80']]}]}
+    tests['twse_full_native_names']='PASS' if official_names(names_obj,'TWSE','20261013')=={
+        '2330':'台積電','0050':'元大台灣50'} else 'FAIL'
+    otc={'date':'20261013','stat':'ok','tables':[{'fields':['代號','名稱','收盤'],
+         'data':[['6223','旺矽','6130']]}]}
+    tests['tpex_full_native_names']='PASS' if official_names(otc,'TPEx','20261013')=={
+        '6223':'旺矽'} else 'FAIL'
+    def with_bad_name(mutator):
+        d=json.loads(json.dumps(names_obj));mutator(d)
+        return official_names(d,'TWSE','20261013')
+    hold('reject_empty_official_name',lambda:with_bad_name(lambda x:x['tables'][0]['data'][0].__setitem__(1,'')))
+    hold('reject_duplicate_official_name_code',lambda:with_bad_name(lambda x:x['tables'][0]['data'].append(x['tables'][0]['data'][0][:])))
+    hold('reject_missing_official_name_field',lambda:with_bad_name(lambda x:x['tables'][0]['fields'].__setitem__(1,'未確認名稱')))
+    hold('reject_wrong_official_name_date',lambda:with_bad_name(lambda x:x.update(date='20261012')))
+    hold('reject_duplicated_name_column',lambda:with_bad_name(lambda x:x['tables'][0]['fields'].__setitem__(2,'證券名稱')))
+    hold('reject_official_name_rows_empty',lambda:with_bad_name(lambda x:x['tables'][0].update(data=[])))
     return {'status':'PASS' if all(v=='PASS' for v in tests.values()) else 'FAIL',
             'passed':sum(v=='PASS' for v in tests.values()),'total':len(tests),'cases':tests,
             'scope':'PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'}
