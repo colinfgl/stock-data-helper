@@ -1,0 +1,44 @@
+name: stock-primary-issuer-exdate-range-evidence-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-official-twse-exdate-range-20261013]
+    paths:
+      - '.github/workflows/stock_twse_exdate_range_20261013.yml'
+permissions:
+  contents: read
+jobs:
+  official-window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Parse-code QA with fail-closed wrong-day checks
+        run: |
+          python -m py_compile scripts/stock_twse_exdate_range_firstparty_20261013.py
+          python scripts/stock_twse_exdate_range_firstparty_20261013.py --self-test
+      - name: Capture exact official recent 9/17-10/12 calculation results
+        continue-on-error: true
+        run: python scripts/stock_twse_exdate_range_firstparty_20261013.py --start 2026-09-17 --end 2026-10-12 --out official_exdate_20260917_20261012
+      - name: Capture separate earlier monthly period for source reliability
+        continue-on-error: true
+        run: python scripts/stock_twse_exdate_range_firstparty_20261013.py --start 2026-08-17 --end 2026-09-16 --out official_exdate_20260817_20260916
+      - name: Archive original bytes or exact failure reasons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-twse-exdate-range-20261013-${{ github.run_id }}
+          path: |
+            official_exdate_20260917_20261012/
+            official_exdate_20260817_20260916/
+            scripts/stock_twse_exdate_range_firstparty_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Restrict formal credit
+        if: always()
+        run: |
+          echo "Only public official TWSE ex-rights/exdividend calculation results; historical research recovered after cutoff." >> "$GITHUB_STEP_SUMMARY"
+          echo "No issuer exhaustive corporate action, no TPEX, no cash or trading data, no model changes, no Formal or Natural/OOS." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,50 @@
+name: stock-twse-primary-three-year-exdate-archive-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-official-twse-exdate-range-20261013]
+    paths:
+      - '.github/workflows/stock_twse_3y_periods_20261013.yml'
+permissions:
+  contents: read
+concurrency:
+  group: stock-twse-3yr-archive-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  missing-only-months:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0,1,2,3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: All dates partition once and strict source parser QA
+        run: |
+          python -m py_compile scripts/stock_twse_3y_periods_20261013.py scripts/stock_twse_exdate_range_firstparty_20261013.py
+          python scripts/stock_twse_3y_periods_20261013.py --self-test
+          python scripts/stock_twse_exdate_range_firstparty_20261013.py --self-test
+      - name: Fetch only still-missing TWSE calculation windows
+        id: capture
+        run: python scripts/stock_twse_3y_periods_20261013.py --batch ${{ matrix.batch }} --out primary_months_batch${{ matrix.batch }}
+      - name: Preserve monthly official bytes, checksum and every failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-twse-exdate-3y-batch${{ matrix.batch }}-${{ github.run_id }}
+          path: |
+            primary_months_batch${{ matrix.batch }}/
+            scripts/stock_twse_3y_periods_20261013.py
+            scripts/stock_twse_exdate_range_firstparty_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Declare data role
+        if: always()
+        run: |
+          echo "Historical firstparty TWSE TWT49U calculation rows only. Existing Aug17-Sep16/Sep17-Oct12 ranges intentionally not refetched." >> "$GITHUB_STEP_SUMMARY"
+          echo "This is NOT an exhaustive issuer action, TPEx action, MOPS, adjusted close or Formal/Natural/OOS qualification." >> "$GITHUB_STEP_SUMMARY"
+          echo "Any missing official monthly receipt makes that batch FAILED; do not claim all 3yr sources certified without 35/35 and two separately verified existing windows." >> "$GITHUB_STEP_SUMMARY"
