@@ -7,7 +7,12 @@ prediction/portfolio/cash or awards preopen-Natural qualification.
 from __future__ import annotations
 import argparse,hashlib,html,json,pathlib,re,urllib.request,urllib.error,datetime as dt
 from html.parser import HTMLParser
-SRC='https://www.twse.com.tw/exchangeReport/TWT49U?date=20261008&response=html'
+SOURCES=(
+ 'https://www.twse.com.tw/exchangeReport/TWT49U?startDate=20261008&endDate=20261008&response=html',
+ 'https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=20261008&endDate=20261008&response=html',
+ 'https://www.twse.com.tw/exchangeReport/TWT49U?date=20261008&response=html',
+)
+SRC=SOURCES[0]
 EXPECTED={'date':'115年10月08日','symbol':'00400A','before':'16.47','after':'16.35','dividend':'0.120000'}
 class Table(HTMLParser):
  def __init__(self):super().__init__();self.inside=False;self.cell=False;self.text='';self.row=[];self.rows=[]
@@ -51,17 +56,26 @@ def main():
  if args.self_test:selftest();return
  if not args.output:a.error('--output needed')
  p=pathlib.Path(args.output);p.mkdir(parents=True,exist_ok=True)
- request=urllib.request.Request(SRC,headers={'User-Agent':'Mozilla/5.0 source-evidence/1.0','Accept':'text/html'})
- report={'url':SRC,'retrieved_at':dt.datetime.now(dt.timezone.utc).isoformat(),'scope':'POST_CUTOFF_RESEARCH_ONLY','no_natural_credit':True,'status':'HOLD'}
- try:
-  with urllib.request.urlopen(request,timeout=20) as resp:
-   body=resp.read(2000001);code=resp.status;final=resp.geturl()
-  if len(body)>2000000:raise ValueError('BLOB_TOO_LARGE')
-  if not final.startswith('https://www.twse.com.tw/'):raise ValueError('HOST_DRIFT')
-  if code!=200:raise ValueError('HTTP_NOT_200')
-  raw=p/'twse_00400A_20261008.html';raw.write_bytes(body)
-  report.update({'source_sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body),'http_status':code,'parse':parse(body),'status':'PASS_OFFICIAL_EXDATE_ROW_RESEARCH'})
- except Exception as e:report.update({'status':'HOLD_SOURCE_OR_PARSER','failure_type':type(e).__name__,'failure':str(e)[:240]})
+ report={'url':SRC,'retrieved_at':dt.datetime.now(dt.timezone.utc).isoformat(),'scope':'POST_CUTOFF_RESEARCH_ONLY','no_natural_credit':True,'status':'HOLD_SOURCE_OR_PARSER'}
+ attempts=[]
+ for i,url in enumerate(SOURCES):
+  one={'url':url,'index':i,'date_requested':'2026-10-08'}
+  try:
+   request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 source-evidence/1.0','Accept':'text/html'})
+   with urllib.request.urlopen(request,timeout=14) as resp:
+    body=resp.read(2000001);code=resp.status;final=resp.geturl()
+   if len(body)>2000000:raise ValueError('BLOB_TOO_LARGE')
+   if not final.startswith('https://www.twse.com.tw/'):raise ValueError('HOST_DRIFT')
+   if code!=200:raise ValueError('HTTP_NOT_200')
+   raw=p/('twse_00400A_20261008_try'+str(i)+'.html');raw.write_bytes(body)
+   one.update(source_sha256=hashlib.sha256(body).hexdigest(),bytes=len(body),http_status=code)
+   check=parse(body)
+   one['parse']='PASS_EXACT_DATE_UNIQUE'
+   report.update({'url':url,'source_sha256':one['source_sha256'],'bytes':len(body),'http_status':code,'parse':check,'status':'PASS_OFFICIAL_EXDATE_ROW_RESEARCH','raw_path':raw.name})
+   attempts.append(one);break
+  except Exception as e:one.update(status='HOLD',failure_type=type(e).__name__,failure=str(e)[:240])
+  attempts.append(one)
+ report['attempts']=attempts
  (p/'manifest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
  print(json.dumps(report,ensure_ascii=False)[:3000])
 if __name__=='__main__':main()
