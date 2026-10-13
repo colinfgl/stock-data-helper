@@ -4,13 +4,15 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
       - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
       - 'scripts/stock_partial_source_fallback_v1_20261013.py'
       - 'scripts/stock_short_history_research_proxy_v1_20261013.py'
+      - 'scripts/premarket_daily_inputs_3y_20261013.py'
+      - 'scripts/stock_network_partial_retry_guard_20261013.py'
 permissions:
   contents: read
 concurrency:
@@ -66,6 +68,16 @@ jobs:
           assert t['status']=='PASS' and t['passed']==t['total']==16,t
           assert t['scope']=='PURE_SYNTHETIC_TESTS_NO_PRIVATE_INPUT_NO_FORMAL'
           PY
+      - name: Validate 10 truncated-HTTP source retry guards
+        run: |
+          python -m py_compile scripts/premarket_daily_inputs_3y_20261013.py scripts/stock_network_partial_retry_guard_20261013.py
+          python scripts/stock_network_partial_retry_guard_20261013.py > source_gate_qa/network10_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/network10_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==10,x
+          assert x['scope']=='MOCK_HTTP_ONLY_NO_NETWORK_NO_CANONICAL_OUTPUT_NO_NATURAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,6 +88,8 @@ jobs:
             scripts/stock_daily_prior_close_source_closure_v1_20261013.py
             scripts/stock_partial_source_fallback_v1_20261013.py
             scripts/stock_short_history_research_proxy_v1_20261013.py
+            scripts/premarket_daily_inputs_3y_20261013.py
+            scripts/stock_network_partial_retry_guard_20261013.py
           retention-days: 30
           if-no-files-found: error
   collect-next-session-source:
@@ -224,3 +238,4 @@ jobs:
           echo "Independent per-symbol fallback preserves official name/close for valid symbols even when 1/68 adjusted chart fails. It supplies NO H9 model price for unqualified symbols and NO Formal/Natural/OOS credit." >> "$GITHUB_STEP_SUMMARY"
           echo "Read verified_partial/per_symbol_fallback.md in the scheduled job summary for a complete Traditional Chinese per-symbol readout; delivery to ChatGPT is a separate not-yet-proven platform stage." >> "$GITHUB_STEP_SUMMARY"
           echo "00400A/009820/3718 statistical D1-D10 sidecar uses 20+ legal adjusted bars and official prior close, not original H9: no canonical prediction write, calibrated interval claim, Formal/Natural/OOS or executable order." >> "$GITHUB_STEP_SUMMARY"
+          echo "Partial TWSE/TPEx HTTP bodies fail closed, save bounded original partial proof, and permit only one fresh retry. Synthetic HTTP fixture success does not qualify an actual symbol." >> "$GITHUB_STEP_SUMMARY"
