@@ -1,0 +1,51 @@
+name: stock-h9-original-preopen-closure-qa-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-h9-original-preopen-closure-20261013]
+    paths:
+      - '.github/workflows/stock_h9_preopen_closure_20261013.yml'
+      - 'scripts/stock_h9_preopen_canonical_candidate_v1_20261013.py'
+permissions:
+  contents: read
+concurrency:
+  group: stock-h9-preopen-closure-qa-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  immutable-model-source-guard-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile source and run 17 fail-closed tests without user data
+        run: |
+          mkdir -p h9_candidate_qa
+          python -m py_compile scripts/stock_h9_preopen_canonical_candidate_v1_20261013.py
+          python scripts/stock_h9_preopen_canonical_candidate_v1_20261013.py --self-test | tee h9_candidate_qa/selftest17.json
+      - name: Check count and fail-closed output
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          x=json.loads(pathlib.Path('h9_candidate_qa/selftest17.json').read_text())
+          assert x['status']=='PASS' and x['passed']==17 and x['total']==17
+          assert x['scope']=='PURE_SYNTHETIC_NO_PRIVATE_INPUT_NO_FORMAL'
+          PY
+      - name: Save exact code + actual CI result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h9-preopen-original-source-closure-qa-${{ github.run_id }}
+          path: |
+            h9_candidate_qa/selftest17.json
+            scripts/stock_h9_preopen_canonical_candidate_v1_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Release scope note
+        if: always()
+        run: |
+          echo "Public code and synthetic tests ONLY. Private 68 symbol source ZIP/H9 original code not committed." >> "$GITHUB_STEP_SUMMARY"
+          echo "Actual-source 2026-10-13 2600-value equivalence and future-stale rejection are archived privately in Library and Drive." >> "$GITHUB_STEP_SUMMARY"
+          echo "NOT a ChatGPT scheduled worker installation. No Formal PredictionKey, Natural/OOS, brokerage or Config mutation." >> "$GITHUB_STEP_SUMMARY"
