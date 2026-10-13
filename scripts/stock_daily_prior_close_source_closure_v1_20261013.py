@@ -76,29 +76,29 @@ def validated_taiex_ohlc(document: dict, day: str) -> dict:
     check(len(found)==1,'TAIEX_OHLC_EXACT_DAY_MISSING')
     return found[0]
 
+def official_names(obj, market, date):
+    check(str(obj.get('date'))==date and str(obj.get('stat','')).lower()=='ok',
+          'OFFICIAL_NAME_DATE_OR_STATUS_INVALID_'+market)
+    symbol_col,name_col=('證券代號','證券名稱') if market=='TWSE' else ('代號','名稱')
+    names={};matched=0
+    for block in obj.get('tables',[]):
+        fields=block.get('fields') or []
+        if symbol_col not in fields:continue
+        check(fields.count(symbol_col)==1 and fields.count(name_col)==1,
+              'OFFICIAL_NAME_FIELDS_AMBIGUOUS_'+market)
+        ci=fields.index(symbol_col);ni=fields.index(name_col);matched+=1
+        for row in block.get('data',[]):
+            check(isinstance(row,list) and len(row)>max(ci,ni),
+                  'OFFICIAL_NAME_ROW_SCHEMA_'+market)
+            code=str(row[ci]).strip();name=str(row[ni]).strip()
+            check(bool(code and name) and name.lower() not in ('none','null','nan'),
+                  'OFFICIAL_NAME_EMPTY_'+market)
+            check(code not in names,'OFFICIAL_DUPLICATE_NAMED_SYMBOL_'+market+'_'+code)
+            names[code]=name
+    check(matched>0 and bool(names),'OFFICIAL_NAME_TABLE_MISSING_'+market)
+    return names
 def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, universe: list[str], output: pathlib.Path):
     """Require one independently SHA-verified chart per security plus firstparty quotes."""
-    def official_names(obj, market, date):
-        check(str(obj.get('date'))==date and str(obj.get('stat','')).lower()=='ok',
-              'OFFICIAL_NAME_DATE_OR_STATUS_INVALID_'+market)
-        symbol_col,name_col=('證券代號','證券名稱') if market=='TWSE' else ('代號','名稱')
-        names={};matched=0
-        for block in obj.get('tables',[]):
-            fields=block.get('fields') or []
-            if symbol_col not in fields:continue
-            check(fields.count(symbol_col)==1 and fields.count(name_col)==1,
-                  'OFFICIAL_NAME_FIELDS_AMBIGUOUS_'+market)
-            ci=fields.index(symbol_col);ni=fields.index(name_col);matched+=1
-            for row in block.get('data',[]):
-                check(isinstance(row,list) and len(row)>max(ci,ni),
-                      'OFFICIAL_NAME_ROW_SCHEMA_'+market)
-                code=str(row[ci]).strip();name=str(row[ni]).strip()
-                check(bool(code and name) and name.lower() not in ('none','null','nan'),
-                      'OFFICIAL_NAME_EMPTY_'+market)
-                check(code not in names,'OFFICIAL_DUPLICATE_NAMED_SYMBOL_'+market+'_'+code)
-                names[code]=name
-        check(matched>0 and bool(names),'OFFICIAL_NAME_TABLE_MISSING_'+market)
-        return names
     def official_quotes(obj, market, date):
         check(str(obj.get('date'))==date and str(obj.get('stat','')).lower()=='ok','OFFICIAL_DATE_OR_STATUS_INVALID_'+market)
         result={}
