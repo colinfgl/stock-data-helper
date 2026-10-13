@@ -4,10 +4,11 @@ on:
   schedule:
     - cron: '45 12 * * 1-5'
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013]
+    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
+      - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
 permissions:
   contents: read
 concurrency:
@@ -32,6 +33,16 @@ jobs:
           x=json.load(open('source_gate_qa/32_tests.json'))
           assert x['status']=='PASS' and x['passed']==x['total']==32
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
+          PY
+      - name: Validate optional dividend-factor research helper independently
+        run: |
+          python -m py_compile scripts/stock_dividend_factor_reconciliation_v1_20261013.py
+          python scripts/stock_dividend_factor_reconciliation_v1_20261013.py --self-test > source_gate_qa/dividend15_tests.json
+          python - <<'PY'
+          import json
+          a=json.load(open("source_gate_qa/dividend15_tests.json"))
+          assert a["status"]=="PASS" and a["passed"]==a["total"]==15,a
+          assert a["scope"]=="SYNTHETIC_NO_PRIVATE_INPUT_NO_FORMAL"
           PY
       - name: Preserve reusable unit evidence
         if: always()
@@ -58,6 +69,40 @@ jobs:
         continue-on-error: true
         run: |
           python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --out stock_next_session_original_source --mode CAPTURE
+      - name: Optional source-chart dividend-factor audit, nonblocking
+        if: always()
+        continue-on-error: true
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          import datetime,json,pathlib
+          from stock_dividend_factor_reconciliation_v1_20261013 import reconcile
+          root=pathlib.Path("stock_next_session_original_source_raw")
+          out=pathlib.Path("stock_next_session_original_source")
+          out.mkdir(exist_ok=True,parents=True)
+          records=[]
+          for f in sorted(root.glob("chart_*.json")):
+              symbol=f.name[len("chart_"):-len(".json")]
+              try:
+                  q=reconcile(f.read_bytes(),symbol)
+                  records.append({"Symbol":symbol,"Status":q["Status"],"RawSHA256":q["RawSHA256"],
+                                  "DividendLabels":q["DividendLabels"],"Matched":q["Matched"],
+                                  "ThresholdExcluded":q["ExcludedByCountingThreshold"],
+                                  "Holds":q["Holds"],"Events":q["Events"]})
+              except Exception as exc:
+                  records.append({"Symbol":symbol,"Status":"HOLD_SOURCE_OR_SCHEMA","Error":str(exc)[:180]})
+          status="RESEARCH_SIDE_CAR_68_SYMBOL_SCAN" if len(records)==68 else "RESEARCH_SIDE_CAR_PARTIAL_SOURCE"
+          report={"Status":status,"SourceChartFilesScanned":len(records),
+                  "VerifiedCharts":sum(x["Status"]=="RESEARCH_MATCHED" for x in records),
+                  "ChartsWithHold":sum(x["Status"].startswith("HOLD") or x["Status"]=="RESEARCH_PARTIAL_HOLD" for x in records),
+                  "ThresholdExcludedEvents":sum(x.get("ThresholdExcluded",0) for x in records),
+                  "ReportGeneratedAtUTC":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "Records":records,"FormalEligible":False,"NaturalCredit":0,"OOSCredit":0,
+                  "Note":"Nonblocking research-only exact source chart cohort. Can be used for discrepancy triage, never for issuer-exhaustive or future premarket prediction seal."}
+          target=out/"dividend_factor_research_sidecar.json"
+          target.write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf8")
+          print("SIDE_CAR:",report["Status"],"charts",len(records),
+                "excluded dividend events",report["ThresholdExcludedEvents"])
+          PY
       - name: Preserve all raw original bytes and all failed-symbol receipts
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,3 +141,4 @@ jobs:
           echo "Provider bar asof uses original timestamp rather than a fabricated 13:30 publication timestamp." >> "$GITHUB_STEP_SUMMARY"
           echo "Symbol display names are from the same original first-party TWSE/TPEx file; Yahoo English shortName remains audit-only." >> "$GITHUB_STEP_SUMMARY"
           echo "Partial or stale provider source => fail job after preserving per-symbol status. No same-run ChatGPT ForecastSHA, formal/Natural/OOS or cash approval." >> "$GITHUB_STEP_SUMMARY"
+          echo "Dividend-factor chart reconciliation is a separate nonblocking research sidecar; an eligible 68-source manifest is still determined only by the original hard gate." >> "$GITHUB_STEP_SUMMARY"
