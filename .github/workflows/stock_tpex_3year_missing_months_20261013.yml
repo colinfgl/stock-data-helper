@@ -1,0 +1,49 @@
+name: stock-TPEx-exdiv-35-missing-months-research-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-tpex-exdiv-firstparty-20261013]
+    paths:
+      - '.github/workflows/stock_tpex_3year_missing_months_20261013.yml'
+permissions:
+  contents: read
+concurrency:
+  group: stock-tpex-35months-source-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  tpex-primary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0,1,2,3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax and date-window exactness QA
+        run: |
+          python -m py_compile scripts/stock_tpex_exdaily_historical_20261013.py scripts/stock_tpex_3year_missing_months_20261013.py
+          python scripts/stock_tpex_exdaily_historical_20261013.py --self-test
+          python scripts/stock_tpex_3year_missing_months_20261013.py --self-test
+      - name: Capture one fourth of 35 not-yet-archived TPEx historical windows
+        run: python scripts/stock_tpex_3year_missing_months_20261013.py --batch ${{ matrix.batch }} --out tpex_exdiv_monthly_batch${{ matrix.batch }}
+      - name: Preserve every official monthly original and exact-source or failure metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tpex-exdiv-35mo-batch${{ matrix.batch }}-${{ github.run_id }}
+          path: |
+            tpex_exdiv_monthly_batch${{ matrix.batch }}/
+            scripts/stock_tpex_exdaily_historical_20261013.py
+            scripts/stock_tpex_3year_missing_months_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Strict source role
+        if: always()
+        run: |
+          echo "35 new historical TPEx ex-right/exdividend calculation windows only; prior 2025/06 and 2026/09 original windows are separate SHA-verified originals, never fetched twice." >> "$GITHUB_STEP_SUMMARY"
+          echo "Do NOT promote to issuer action exhaustive, MOPS, approved adjusted_close, R33 pre-open prediction, Formal/Natural/OOS, holdings or brokerage." >> "$GITHUB_STEP_SUMMARY"
+          echo "One missing window must remain HOLD, even if workflow still generated an artifact." >> "$GITHUB_STEP_SUMMARY"
