@@ -1,0 +1,46 @@
+name: stock-5371-to-3718-historical-source-recovery-20261013
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-5371-3718-source-recovery-20261013]
+    paths:
+      - '.github/workflows/stock_legacy_5371_3718_20261013.yml'
+permissions:
+  contents: read
+concurrency:
+  group: stock-legacy-5371-3718-source-recovery-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  research-source-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run no-leakage self-tests
+        run: |
+          python -m py_compile scripts/stock_legacy_5371_3718_source_collector_20261013.py
+          python scripts/stock_legacy_5371_3718_source_collector_20261013.py --self-test
+      - name: Retrieve bounded 5371 old / 3718 new official and provider original bytes
+        id: capture
+        continue-on-error: true
+        run: |
+          python scripts/stock_legacy_5371_3718_source_collector_20261013.py --output stock_legacy_research_20261013
+      - name: Preserve every successful source and every failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-legacy-5371-3718-research-${{ github.run_id }}
+          path: |
+            stock_legacy_research_20261013/
+            scripts/stock_legacy_5371_3718_source_collector_20261013.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Declare scope and truthful evidence status
+        if: always()
+        run: |
+          echo "One-shot public original research capture, NOT a formal H9 forecast or Natural/OOS." >> "$GITHUB_STEP_SUMMARY"
+          echo "No change to portfolio, cash, model, sealed Config, predictions or official due-day runs." >> "$GITHUB_STEP_SUMMARY"
+          echo "Per-source exact date/stock/sha status and any failures are in manifest.json." >> "$GITHUB_STEP_SUMMARY"
