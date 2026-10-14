@@ -1,0 +1,77 @@
+name: stock-official-matured-1012-1013-oneoff-proof
+on:
+  push:
+    branches: [stock-official-matured1012-1013-backfill-20261014]
+    paths:
+      - '.github/workflows/stock_official_matured_1012_1013_qa_20261014.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dated-actual-source-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify unmodified 15 firstparty parser guards
+        run: |
+          python -m py_compile scripts/stock_official_actual_afterclose_v1_20261014.py
+          python scripts/stock_official_actual_afterclose_v1_20261014.py --self-test > parser15.json
+          python - <<'PY'
+          import json
+          x=json.load(open('parser15.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==15,x
+          PY
+      - name: Original 2026-10-12 exact OHLC first-party research only
+        continue-on-error: true
+        run: |
+          python scripts/stock_official_actual_afterclose_v1_20261014.py --date 2026-10-12 --out official_maturity_20261012
+      - name: Original 2026-10-13 exact OHLC first-party research only
+        continue-on-error: true
+        run: |
+          python scripts/stock_official_actual_afterclose_v1_20261014.py --date 2026-10-13 --out official_maturity_20261013
+      - name: Check date-scoped primary raw SHA original and all 68 symbols
+        run: |
+          python - <<'PY'
+          import hashlib,json,pathlib
+          summary={}
+          for day in ('20261012','20261013'):
+              root=pathlib.Path('official_maturity_'+day)
+              path=root/'official_actual_research_68.json'
+              assert path.exists(),f'NO_RESEARCH_MANIFEST_{day}'
+              x=json.loads(path.read_bytes())
+              assert x['target_date']==f'{day[:4]}-{day[4:6]}-{day[6:8]}'
+              assert x['exact_ohlc_count']==68 and x['partial_or_hold_count']==0,x
+              assert len(x['Rows'])==68 and x['taiex'] is not None,x
+              assert len({r['symbol'] for r in x['Rows']})==68
+              assert all(r['source_status']=='PRIMARY_OFFICIAL_EXACT_DATE_OHLC' for r in x['Rows'])
+              for role,rec in x['originals'].items():
+                  assert rec.get('status','').startswith('OFFICIAL_EXACT_DATE_'),(day,role,rec)
+                  b=(root/'originals'/(role+'.json')).read_bytes()
+                  assert hashlib.sha256(b).hexdigest()==rec['sha256'],(day,role)
+              assert not x['canonical_outcome_written'] and not x['formal_prediction_written']
+              assert x['natural_credit']==0 and x['oos_credit']==0
+              summary[day]={'actual':x['exact_ohlc_count'],'index':x['taiex'],
+                            'source_sha':{k:v['sha256'] for k,v in x['originals'].items()},
+                            'official_raw_bytes':{k:v['bytes'] for k,v in x['originals'].items()}}
+          print('OFFICIAL_MATURED_1012_1013_AUDIT_'+json.dumps(summary,ensure_ascii=False))
+          PY
+      - name: Preserve original firstparty actuals and receipts when partial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-maturity-original1012-1013-${{ github.run_id }}
+          path: |
+            parser15.json
+            official_maturity_20261012/
+            official_maturity_20261013/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Truthful scoring and schedule boundary
+        if: always()
+        run: |
+          echo 'Historical firstparty TWSE TPEx TAIEX actual retrieval 2026-10-12 and 2026-10-13 is RESEARCH_ONLY, separate from 19:00 STOCK_SETTLEMENT and 20:45 official collector.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No canonical Outcome or formal Prediction/Preseal, no Natural/OOS, no changed user Task prompt/schedule; any missing source must stay research HOLD.' >> "$GITHUB_STEP_SUMMARY"
