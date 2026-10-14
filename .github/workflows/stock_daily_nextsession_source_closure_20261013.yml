@@ -8,7 +8,7 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [stock-source-report-continuity-20261014, stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
+    branches: [stock-generic-source-three-original-20261014, stock-source-report-continuity-20261014, stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -19,6 +19,8 @@ on:
       - 'scripts/stock_network_partial_retry_guard_20261013.py'
       - 'scripts/stock_dual_origin_prior_close_research_v1_20261013.py'
       - 'scripts/stock_three_original_prior_close_research_20261014.py'
+      - 'scripts/stock_three_original_generic_research_v1_20261014.py'
+      - 'scripts/stock_three_original_archive_locator_v1_20261014.py'
       - 'scripts/stock_source_report_continuity_v1_20261014.py'
       - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
@@ -138,6 +140,26 @@ jobs:
           assert a['status']=='PASS' and a['passed']==a['total']==23,a
           assert a['scope']=='SYNTHETIC_REPORT_ONLY_NO_FORMAL_NO_NATURAL_NO_PLATFORM_DELIVERY'
           PY
+      - name: Validate 15 date-generic immutable three-parent research guards
+        run: |
+          python -m py_compile scripts/stock_three_original_generic_research_v1_20261014.py
+          python scripts/stock_three_original_generic_research_v1_20261014.py --self-test > source_gate_qa/generic_three15_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/generic_three15_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==15,x
+          assert x['scope']=='PURE_SYNTHETIC_GENERIC_MARKET_DATES_NO_FORMAL_NATURAL'
+          PY
+      - name: Validate 19 per-session GitHub archive locator identity/time guards
+        run: |
+          python -m py_compile scripts/stock_three_original_archive_locator_v1_20261014.py
+          python scripts/stock_three_original_archive_locator_v1_20261014.py --self-test > source_gate_qa/generic_archive19_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/generic_archive19_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==19,x
+          assert x['scope']=='SYNTHETIC_ARCHIVE_LOCATOR_NO_PRIVATE_DATA_NO_FORMAL'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,6 +177,8 @@ jobs:
             scripts/stock_taiex_14gap_research_v1_20261013.py
             scripts/stock_source_trigger_guard_v2_20261013.py
             scripts/stock_source_report_continuity_v1_20261014.py
+            scripts/stock_three_original_generic_research_v1_20261014.py
+            scripts/stock_three_original_archive_locator_v1_20261014.py
           retention-days: 30
           if-no-files-found: error
   three-original-archived-replay-20261014:
@@ -484,15 +508,75 @@ jobs:
           if [ -f stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md ]; then
             cat stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Find exact prior and previous-evening GitHub artifacts from LIVE session receipt
+        if: always()
+        id: generic_archive
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f=stock_next_session_original_source_raw/acquisition_receipt.json
+          if [ ! -f "$f" ]; then
+            echo 'NO_SOURCE_RECEIPT_FOR_DYNAMIC_ARCHIVE_HOLD'
+            exit 0
+          fi
+          python scripts/stock_three_original_archive_locator_v1_20261014.py \
+            --current-receipt "$f" \
+            --output stock_next_session_original_source/generic_archive_locator.json \
+            --max-pages 20
+          cat stock_next_session_original_source/generic_archive_locator.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Load independently archived old source, without overwriting current original
+        if: steps.generic_archive.outputs.prior_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.generic_archive.outputs.prior_name }}
+          repository: colinfgl/stock-data-helper
+          run-id: ${{ steps.generic_archive.outputs.prior_run_id }}
+          github-token: ${{ github.token }}
+          path: stock_previous_source_dynamic
+      - name: Load previous EVENING raw artifact, excluding overnight recovery and current run
+        if: steps.generic_archive.outputs.evening_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.generic_archive.outputs.evening_name }}
+          repository: colinfgl/stock-data-helper
+          run-id: ${{ steps.generic_archive.outputs.evening_run_id }}
+          github-token: ${{ github.token }}
+          path: stock_evening_source_dynamic
+      - name: Verify date-generic three-original 68 symbols from independent receipt SHAs
+        if: always()
+        continue-on-error: true
+        env:
+          VERIFIED_DAY8: ${{ steps.generic_archive.outputs.current_day8 }}
+        run: |
+          prior="stock_previous_source_dynamic/public_input_${VERIFIED_DAY8}"
+          evening='stock_evening_source_dynamic/stock_next_session_original_source_raw'
+          morning='stock_next_session_original_source_raw'
+          if [ ! -f "$prior/acquisition_receipt.json" ] || [ ! -f "$evening/acquisition_receipt.json" ] || [ ! -f "$morning/acquisition_receipt.json" ]; then
+            echo "DYNAMIC_THREE_RAW_HOLD: prior/evening/current immutable receipt absent; no fabricated 68/68"
+            exit 0
+          fi
+          python scripts/stock_three_original_generic_research_v1_20261014.py \
+            --prior-dir "$prior" --evening-dir "$evening" \
+            --morning-dir "$morning" \
+            --out stock_next_session_original_source/three_original_generic
+          f=stock_next_session_original_source/three_original_generic/three_original_research_68.md
+          if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Freeze separate human-readable 68-symbol research report with SHA readback
         if: always()
         continue-on-error: true
         env:
           RUN_TRIGGER_EVENT: ${{ github.event_name }}
         run: |
+          triple=stock_next_session_original_source/three_original_generic/three_original_research_68.json
+          if [ ! -f "$triple" ]; then
+            triple=stock_next_session_original_source/three_original_research/three_original_research_68.json
+          fi
           python scripts/stock_source_report_continuity_v1_20261014.py \
             --partial stock_next_session_original_source/verified_partial/per_symbol_fallback.json \
-            --triple stock_next_session_original_source/three_original_research/three_original_research_68.json \
+            --triple "$triple" \
             --out stock_next_session_original_source/report_continuity \
             --trigger "$RUN_TRIGGER_EVENT"
           f=stock_next_session_original_source/report_continuity/source_delivery_report.md
@@ -552,3 +636,4 @@ jobs:
           echo "00400A/009820/3718 statistical D1-D10 sidecar uses 20+ legal adjusted bars and official prior close, not original H9: no canonical prediction write, calibrated interval claim, Formal/Natural/OOS or executable order." >> "$GITHUB_STEP_SUMMARY"
           echo "Partial TWSE/TPEx HTTP bodies fail closed, save bounded original partial proof, and permit only one fresh retry. Synthetic HTTP fixture success does not qualify an actual symbol." >> "$GITHUB_STEP_SUMMARY"
           echo "Cross-midnight source date is bound to verified prior completed market day, never to next morning machine date; 08:09:30 cutoff enforced and old 10/12 original loaded for 10/13 source day only. All are RESEARCH, not Formal/Natural/OOS." >> "$GITHUB_STEP_SUMMARY"
+          echo 'For future dates, dynamic research archive candidates come from exact current source receipt + prior-evening-only artifacts; every raw SHA/date remains separately verified. Missing archives HOLD optional recovery, not the whole partial report.' >> "$GITHUB_STEP_SUMMARY"
