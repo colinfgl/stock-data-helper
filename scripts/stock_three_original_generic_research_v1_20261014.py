@@ -238,7 +238,7 @@ def run(prior_dir,evening_dir,morning_dir,outdir):
 
 def selftest():
     import copy
-    dates=[dt.datetime(2026,9,20+i,9,tzinfo=TZ) for i in range(12)]
+    dates=[dt.datetime(2026,9,20,9,tzinfo=TZ)+dt.timedelta(days=i) for i in range(12)]
     def generate(prev="20261013",current="20261014",morning_missing=True):
         p=dt.datetime.strptime(prev,"%Y%m%d").replace(hour=9,tzinfo=TZ)
         c=dt.datetime.strptime(current,"%Y%m%d").replace(hour=9,tzinfo=TZ)
