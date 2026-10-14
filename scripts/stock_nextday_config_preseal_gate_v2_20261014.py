@@ -141,8 +141,18 @@ def assess(snapshot):
     except (TypeError,ValueError):
         cfg_hash=None
         check(False,"CFG_HASH_V2_FIELDS_INCOMPLETE")
-    check(writer.get("live_checked") is True and writer.get("state")=="FREE"
-          and writer.get("writer_scope")=="STOCK_CONFIG_NEXTDAY",
+    # Fresh unowned FREE is legal for first-stage plan, while a crashed
+    # original writer may resume with a current, exact owned ACTIVE lease.
+    # Generic ACTIVE or ACTIVE under another token/scope ALWAYS blocks.
+    owned=(writer.get("state")=="ACTIVE_OWNED"
+           and isinstance(writer.get("active_lease_token"),str)
+           and writer["active_lease_token"].startswith("STOCK-WRITE-")
+           and writer.get("same_scope_owner") is True
+           and writer.get("lease_exact_readback") is True
+           and writer.get("no_competing_active_writer") is True)
+    check(writer.get("live_checked") is True
+          and writer.get("writer_scope")=="STOCK_CONFIG_NEXTDAY"
+          and (writer.get("state")=="FREE" or owned),
           "FRESH_WRITER_LEASE_OR_UNCHECKED_CONFLICT")
     check(isinstance(ex,list) and not [r for r in ex if r.get("target_date")==str(target)
           and r.get("status") in ("SEALED","PRESEALED","ACTIVE_SEALED")],
@@ -230,6 +240,21 @@ def selftest():
     checks["plan_24_cells"]=len(r["row"])==24 and r["native_write"] is False
     checks["hash_exact_sorted_json"]=r["canonical_hash"]==canonical_hash(v)
     checks["no_formal_natural_oos"]=r["natural_credit"]==r["oos_credit"]==0 and not r["formal_forecast_eligible"]
+    def set_owned(x):
+        x["writer"].update(state="ACTIVE_OWNED",
+                           active_lease_token="STOCK-WRITE-ORIGINAL-TEST-20261014",
+                           same_scope_owner=True,lease_exact_readback=True,
+                           no_competing_active_writer=True)
+    run("active_owned_exact_same_writer_plan_allowed",set_owned,allow=True)
+    def bad_owned_token(x):
+        set_owned(x)
+        x["writer"]["active_lease_token"]="WRONG-UNOWNED"
+    def bad_owned_readback(x):
+        set_owned(x)
+        x["writer"]["lease_exact_readback"]=False
+    def bad_owned_competing(x):
+        set_owned(x)
+        x["writer"]["no_competing_active_writer"]=False
     cases={
       "future_target_after_0810":lambda x:x.update(requested_at="2026-10-15T08:10:00+08:00"),
       "naive_clock":lambda x:x.update(requested_at="2026-10-14T19:23:00"),
@@ -258,6 +283,9 @@ def selftest():
       "wrong_cfg_hash_version":lambda x:x["authority"]["canonical"].update(ConfigHashVersion="CFG-HASH-v1"),
       "missing_field":lambda x:x["authority"]["canonical"].pop("DataRelease"),
       "writer_active":lambda x:x["writer"].update(state="ACTIVE"),
+      "active_owned_wrong_token":bad_owned_token,
+      "active_owned_no_lease_readback":bad_owned_readback,
+      "active_owned_other_writer_competes":bad_owned_competing,
       "writer_scope_wrong":lambda x:x["writer"].update(writer_scope="SOMETHING_ELSE"),
       "duplicate_active_target":lambda x:x["existing_configs"].append({"target_date":target,"status":"PRESEALED"}),
       "wrong_candidate_day":lambda x:x.update(candidate_id="STOCK-CFG-20261014-RNEXTC01-R34-01"),
