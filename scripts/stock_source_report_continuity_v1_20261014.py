@@ -114,7 +114,7 @@ def reconcile_triple(p,triple):
         return {"status":"TRIPLE_INVALID_NOT_USED","reason":"NOT_OBJECT","Direct":0,"Fallback":0}
     try:
         triple_day=triple.get("TargetSession")
-        if isinstance(triple_day,str) and re.fullmatch(r"\\d{8}",triple_day):
+        if isinstance(triple_day,str) and re.fullmatch(r"\d{8}",triple_day):
             triple_day=dt.datetime.strptime(triple_day,"%Y%m%d").date().isoformat()
         if triple_day!=p["TargetDate"]:
             raise invalid("TRIPLE_TARGET_MISMATCH")
