@@ -1,0 +1,111 @@
+name: stock-generic-three-original-real-archive-qa
+on:
+  push:
+    branches: [stock-generic-source-three-original-20261014]
+    paths:
+      - '.github/workflows/stock_three_original_generic_research_qa_20261014.yml'
+      - 'scripts/stock_three_original_generic_research_v1_20261014.py'
+      - 'scripts/stock_source_report_continuity_v1_20261014.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  authentic-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generic 15/15 synthetic safety and compile
+        run: |
+          mkdir -p generic_three_qa
+          python -m py_compile scripts/stock_three_original_generic_research_v1_20261014.py
+          python scripts/stock_three_original_generic_research_v1_20261014.py --self-test > generic_three_qa/15_safety_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('generic_three_qa/15_safety_tests.json'))
+          assert x['status']=='PASS' and x['total']==x['passed']==15,x
+          assert x['scope']=='PURE_SYNTHETIC_GENERIC_MARKET_DATES_NO_FORMAL_NATURAL'
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: stock-public-input-20261013-38265016756-1
+          repository: colinfgl/stock-data-helper
+          run-id: 38265016756
+          github-token: ${{ github.token }}
+          path: generic_three_qa/old
+      - uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38401880091
+          repository: colinfgl/stock-data-helper
+          run-id: 38401880091
+          github-token: ${{ github.token }}
+          path: generic_three_qa/evening
+      - uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38483763642
+          repository: colinfgl/stock-data-helper
+          run-id: 38483763642
+          github-token: ${{ github.token }}
+          path: generic_three_qa/morning
+      - name: Reconcile three actual immutable originals using non-hardcoded session dates
+        run: |
+          python scripts/stock_three_original_generic_research_v1_20261014.py \
+            --prior-dir generic_three_qa/old/public_input_20261013 \
+            --evening-dir generic_three_qa/evening/stock_next_session_original_source_raw \
+            --morning-dir generic_three_qa/morning/stock_next_session_original_source_raw \
+            --out generic_three_qa/out
+          python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('generic_three_qa/out/three_original_research_68.json')
+          r=json.loads(p.read_bytes())
+          assert r['TargetSession']=='2026-10-14'
+          assert r['PreviousSession']=='20261012'
+          assert r['CurrentSession']=='20261013'
+          assert r['EligibleResearchRows']==68 and r['MorningDirect']==65 and r['EveningFallback']==3,r
+          assert r['ResearchHolds']==0 and r['FormalEligible'] is False
+          assert r['NaturalCredit']==r['OOSCredit']==0
+          assert not r['CanonicalPredictionWritten']
+          assert len(r['Rows'])==68
+          print('AUTHENTIC_GENERIC_68_65_3_PASS')
+          PY
+      - name: Verify existing 68-name report adapter consumes dynamic date output unaltered
+        run: |
+          python scripts/stock_partial_source_fallback_v1_20261013.py \
+            --raw-dir generic_three_qa/morning/stock_next_session_original_source_raw \
+            --output generic_three_qa/partial
+          python scripts/stock_source_report_continuity_v1_20261014.py \
+            --partial generic_three_qa/partial/per_symbol_fallback.json \
+            --triple generic_three_qa/out/three_original_research_68.json \
+            --out generic_three_qa/report --trigger workflow_run
+          python - <<'PY'
+          import hashlib,json,pathlib
+          d=pathlib.Path('generic_three_qa/report')
+          x=json.loads((d/'source_delivery_report.json').read_bytes())
+          y=json.loads((d/'source_delivery_receipt.json').read_bytes())
+          assert x['Status']=='RESEARCH_68_WITH_3_ORIGINAL_RECONCILIATION' and len(x['Rows'])==68,x
+          assert x['OfficialPriorCloseCount']==68 and x['SingleOriginalResearchReadyCount']==65
+          assert x['TripleResearch']['Direct']==65 and x['TripleResearch']['Fallback']==3
+          assert hashlib.sha256((d/'source_delivery_report.md').read_bytes()).hexdigest()==y['ReportMarkdownSHA256']
+          assert not x['FormalEligible'] and not x['NativeChatReportDelivered'] and not x['NaturalCredit']
+          print('DYNAMIC_SOURCE_REPORT_FULL68_READBACK_PASS',y['ReportMarkdownSHA256'])
+          PY
+      - name: Preserve test and real original linkage result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generic-three-original-real-68-${{ github.run_id }}
+          path: |
+            generic_three_qa/15_safety_tests.json
+            generic_three_qa/out/
+            generic_three_qa/report/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Clear truthful separation
+        if: always()
+        run: |
+          echo 'Dynamic PIT research restored on authentic archived original captures; official original 68/68 research, direct65, archived3.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No canonical Formal H9 prediction, broker order, issuer approval, ChatGPT inline delivery or Natural/OOS credit.' >> "$GITHUB_STEP_SUMMARY"
