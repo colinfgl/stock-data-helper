@@ -1,0 +1,38 @@
+name: stock-20261015-prospective-second-baseline-true-PIT-research-QA
+on:
+  push:
+    branches: [stock-20261015-prospective-second-baseline-20261014]
+    paths:
+      - 'research/20261014/stock_20261015_naive_second_baseline_sealed_20261014.json'
+      - '.github/workflows/stock_20261015_prospective_second_baseline_qa_20261014.yml'
+permissions:
+  contents: read
+jobs:
+  immutable-research-baseline-cert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Independently re-hash all 71 future-outcome-blind records
+        run: |
+          python - <<'PY'
+          import json,hashlib,re,datetime,pathlib
+          path=pathlib.Path("research/20261014/stock_20261015_naive_second_baseline_sealed_20261014.json")
+          obj=json.loads(path.read_bytes())
+          canonical={key:obj[key] for key in ("contract","frozenAt","sourceDate","target","sourceSummarySHA256","entries")}
+          canonical_raw=json.dumps(canonical,ensure_ascii=False,separators=(",",":"),allow_nan=False).encode("utf8")
+          sha=hashlib.sha256(canonical_raw).hexdigest()
+          assert sha==obj["SealedResearchSHA256"]=="746314da8da9643941630a8779925b66b5bcf3c212989e8310ff6d9c1604ac2f",sha
+          a=obj["entries"]
+          stock=[x for x in a if x["scope"]=="STOCK"]
+          index=[x for x in a if x["scope"]=="TAIEX"]
+          assert len(a)==71 and len(stock)==68 and len(index)==3
+          assert len({x["code"] for x in stock})==68
+          assert [x["code"] for x in index]==["TAIEX_CLOSE","TAIEX_HIGH","TAIEX_LOW"]
+          assert [float(x["value"]) for x in index]==[48625.83,49059.12,48382.64]
+          assert all(x["sourceDate"]=="2026-10-14" and x["target"]=="2026-10-15" and float(x["value"])>0 for x in a)
+          assert datetime.datetime.strptime(obj["frozenAt"],"%Y-%m-%d %H:%M:%S Asia/Taipei")<datetime.datetime(2026,10,15,8,10)
+          assert obj["NoFutureActualObserved"] and not obj["FormalEligible"] and obj["NaturalCredit"]==obj["OOSCredit"]==0
+          assert obj["sourceSummarySHA256"]=="96e580e5035bb4a8dcf18db08acf639e9fc695aaca4ea6331cc8004eeabb2678"
+          assert all(re.fullmatch(r"[0-9a-f]{64}",x["original"]) for x in a)
+          print("71/71 research PIT baseline source/date/frozen SHA VERIFIED; no Formal/Natural/OOS",sha)
+          PY
