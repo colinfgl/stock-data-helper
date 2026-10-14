@@ -267,7 +267,7 @@ def selftest():
     expected_hash="d936e90f2e866de19bef4fc4ef740cf0a65c4b6c97fd4b311463ae03fbaf75fd"
     historic={
       "TargetDate":"2026-10-13","DataRelease":"R-next-C01","RuntimeControl":"R151.6-IMMUTABLE-SLO",
-      "CurrentID":"1hdbBzeFRGSr0D8hJZkEeoDm0X7kUrZ6","TodoID":"15iqV8Xtsl4PM5_LK3qFT-x2x09ymHgnP_IW6lP85Axk",
+      "CurrentID":"1hdbBzeFRGSr0D8hJZkEeoDm0X7kXUrZ6","TodoID":"15iqV8Xtsl4PM5_LK3qFT-x2x09ymHgnP_IW6lP85Axk",
       "LatestID":"1eD-O6RPidhNiM5a8ZEr7dSJzCg215tem",
       "LatestSHA":"af7bec4aee198aa2cb5d7b6dae651d29f0386c119ba4e4ababebd69a37510863",
       "ControlSheetID":"1UYSxDe4g44QKJIQvGY4MW-Atcx6aqMja_lliC-f8p1o",
