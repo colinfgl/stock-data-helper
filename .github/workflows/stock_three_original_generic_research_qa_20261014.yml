@@ -62,6 +62,23 @@ jobs:
           run-id: 38483763642
           github-token: ${{ github.token }}
           path: generic_three_qa/morning
+      - name: Discover real preceding immutable artifacts from GitHub API by date
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          import json,os,pathlib
+          from stock_three_original_archive_locator_v1_20261014 import get_latest,selection
+          root=pathlib.Path('generic_three_qa/morning/stock_next_session_original_source_raw')
+          current=json.loads((root/'acquisition_receipt.json').read_bytes())
+          result=selection(current,get_latest(os.environ['GITHUB_REPOSITORY'],os.environ['GH_TOKEN'],20),'38483763642')
+          p=pathlib.Path('generic_three_qa/real_archive_discovery.json')
+          p.write_text(json.dumps(result,ensure_ascii=False,sort_keys=True,indent=2)+'\n',encoding='utf8')
+          print('REAL_DISCOVERY',result)
+          assert result['Status']=='ARTIFACT_METADATA_CANDIDATES_ONLY_NOT_SOURCE_QUALIFIED',result
+          assert result['PriorPublicInputRunID']=='38265016756' and result['EveningRunID']=='38401880091',result
+          assert result['FormalEligible'] is False and result['NaturalCredit']==0
+          PY
       - name: Reconcile three actual immutable originals using non-hardcoded session dates
         run: |
           python scripts/stock_three_original_generic_research_v1_20261014.py \
@@ -112,6 +129,7 @@ jobs:
           path: |
             generic_three_qa/15_safety_tests.json
             generic_three_qa/18_locator_tests.json
+            generic_three_qa/real_archive_discovery.json
             generic_three_qa/out/
             generic_three_qa/report/
           if-no-files-found: warn
