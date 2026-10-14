@@ -1,0 +1,100 @@
+name: stock-source-report-continuity-v1-qa
+on:
+  push:
+    branches: [stock-source-report-continuity-20261014]
+    paths:
+      - 'scripts/stock_source_report_continuity_v1_20261014.py'
+      - '.github/workflows/stock_source_report_continuity_qa_20261014.yml'
+      - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verified-source-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run 23 fail-closed cases
+        run: |
+          mkdir -p source_report_qa
+          python -m py_compile scripts/stock_source_report_continuity_v1_20261014.py
+          python scripts/stock_source_report_continuity_v1_20261014.py --self-test > source_report_qa/synthetic.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_report_qa/synthetic.json',encoding='utf-8'))
+          assert x['status']=='PASS' and x['passed']==x['total']==23,x
+          assert x['scope']=='SYNTHETIC_REPORT_ONLY_NO_FORMAL_NO_NATURAL_NO_PLATFORM_DELIVERY'
+          PY
+      - name: Authentic 10/12 prior Yahoo and exchange original
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-public-input-20261013-38265016756-1
+          repository: colinfgl/stock-data-helper
+          run-id: 38265016756
+          github-token: ${{ github.token }}
+          path: real/prior
+      - name: Authentic 10/13 evening original with 68 charts
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38401880091
+          repository: colinfgl/stock-data-helper
+          run-id: 38401880091
+          github-token: ${{ github.token }}
+          path: real/evening
+      - name: Authentic 10/14 morning original with 65 valid adjusted charts
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38483763642
+          repository: colinfgl/stock-data-helper
+          run-id: 38483763642
+          github-token: ${{ github.token }}
+          path: real/morning
+      - name: Rebuild two independent reports from real archived originals
+        run: |
+          python scripts/stock_partial_source_fallback_v1_20261013.py --raw-dir real/morning/stock_next_session_original_source_raw --output source_report_qa/partial
+          python scripts/stock_three_original_prior_close_research_20261014.py --prior-dir real/prior/public_input_20261013 --evening-dir real/evening/stock_next_session_original_source_raw --morning-dir real/morning/stock_next_session_original_source_raw --out source_report_qa/triple
+          python scripts/stock_source_report_continuity_v1_20261014.py --partial source_report_qa/partial/per_symbol_fallback.json --triple source_report_qa/triple/three_original_research_68.json --out source_report_qa/delivery --trigger workflow_run
+      - name: Validate actual 68 names and research-only receipt
+        run: |
+          python - <<'PY'
+          import pathlib,json,hashlib
+          root=pathlib.Path('source_report_qa/delivery')
+          result=json.loads((root/'source_delivery_report.json').read_bytes())
+          rec=json.loads((root/'source_delivery_receipt.json').read_bytes())
+          assert result['Status']=='RESEARCH_68_WITH_3_ORIGINAL_RECONCILIATION',result
+          assert result['RosterCount']==68 and len(result['Rows'])==68
+          assert result['OfficialPriorCloseCount']==68
+          assert result['SingleOriginalResearchReadyCount']==65
+          assert result['TripleResearch']['status']=='TRIPLE_VERIFIED_INDEPENDENT_REPORT'
+          assert result['TripleResearch']['Direct']==65 and result['TripleResearch']['Fallback']==3
+          assert not result['FormalEligible'] and not result['NativeChatReportDelivered']
+          assert result['NaturalCredit']==result['OOSCredit']==0
+          md=(root/'source_delivery_report.md').read_bytes()
+          assert hashlib.sha256(md).hexdigest()==rec['ReportMarkdownSHA256']
+          assert all(r['Name'] in md.decode('utf-8') for r in result['Rows'])
+          assert len(result['Rows'])==len(set(z['Symbol'] for z in result['Rows']))
+          print('REAL ORIGINAL 68/68; direct65 plus archived recovery3; report/receipt readback PASS')
+          PY
+      - name: Preserve actual 68-source research report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-actual-source-report-${{ github.run_id }}
+          path: |
+            source_report_qa/synthetic.json
+            source_report_qa/delivery/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Publish actual research report in GitHub summary
+        if: always()
+        run: |
+          echo "This research report saves and reads back independently of strict Formal source gate." >> "$GITHUB_STEP_SUMMARY"
+          echo "No ChatGPT message ID, native Sheets formal seal, Natural/OOS or broker order evidence is produced." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f source_report_qa/delivery/source_delivery_report.md ]; then
+            cat source_report_qa/delivery/source_delivery_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
