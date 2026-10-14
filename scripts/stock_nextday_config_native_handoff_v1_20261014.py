@@ -120,6 +120,76 @@ def update(rowindex,values,column_index=0):
       "rows":[{"values":[{"userEnteredValue":{"stringValue":v}} for v in values]}],
       "fields":"userEnteredValue"}}
 
+def resume_pending_target(rows,draft,lease,snapshot,before_captured_at):
+    """Only same active writer and SAME immutable 24 fields may resume.
+
+    A staged row is NEVER formal by itself. No overwrite, no second append.
+    A crashed/abandoned writer with another lease token remains HOLD for
+    governed reconciliation; silent takeover could hide a concurrent writer.
+    """
+    target=draft["row"][0]
+    matches=[(i,r) for i,r in enumerate(rows[1:],1) if r and r[0]==target]
+    if len(matches)!=1:
+        return hold("MULTIPLE_TARGET_ROWS_OR_UNVERIFIED_RESUME")
+    idx,original=matches[0]
+    row=normalized_row(original)
+    if row is None or row[2]!=PENDING:
+        return hold("EXISTING_TARGET_NOT_OWNED_PENDING_DO_NOT_OVERWRITE")
+    if row[1]!=draft["row"][1]:
+        return hold("PENDING_EXISTING_CONFIG_ID_CONFLICT")
+    if row[19]!=draft["canonical_hash"]:
+        return hold("PENDING_CONFIG_HASH_CONFLICT")
+    expected_note=("PENDING_READBACK_RUNID="+draft["run_id_dependency"]+
+                   ";LEASE="+lease["writer_token"]+
+                   ";REQUIRES_TRUE_NATIVE_STAGE_AND_FINAL_READBACK")
+    if row[21]!=expected_note:
+        return hold("PENDING_ORIGINAL_WRITER_OR_RUNID_CONFLICT_NO_TAKEOVER")
+    try:
+        stage_clock=dt.datetime.strptime(row[3],"%Y-%m-%d %H:%M:%S Asia/Taipei").replace(tzinfo=TZ)
+    except (ValueError,TypeError):
+        return hold("PENDING_ORIGINAL_SEAL_TIMESTAMP_UNVERIFIED")
+    request_clock=valid_clock(snapshot.get("requested_at"))
+    checked=valid_clock(before_captured_at)
+    if (request_clock is None or checked is None or
+        stage_clock>checked or stage_clock>request_clock or
+        not before_target_preopen(target,row[3].replace(" Asia/Taipei","+08:00"))):
+        return hold("PENDING_ORIGINAL_SEAL_TIME_OUTSIDE_PREOPEN")
+    for j,expected in enumerate(draft["row"]):
+        if j in (2,3,21):
+            continue
+        if row[j]!=expected:
+            return hold("PENDING_NONSTATUS_IMMUTABLE_FIELD_CONFLICT_COL_"+str(j))
+    try:
+        native_hash=canonical_hash(fixed_canonical_from_row(row))
+    except (TypeError,ValueError,KeyError) as exc:
+        return hold("PENDING_NATIVE_SCHEMA_OR_HASH_INVALID",detail=str(exc))
+    if native_hash!=draft["canonical_hash"]:
+        return hold("PENDING_CANONICAL_FINGERPRINT_DIFFERENT")
+    manifest={
+       "decision":"STAGE_REQUEST_READY_NOT_EXECUTED",
+       "target_date":target,"expected_config_id":row[1],
+       "expected_lease_token":lease["writer_token"],
+       "source_settlement_run_id":draft["run_id_dependency"],
+       "cfg_hash":draft["canonical_hash"],
+       "sheet_id":TAB_ID,"native_row_index_0based":idx,
+       "stage_row":row,"stage_request":None,
+       "source_snapshot_sha":digest(snapshot),
+       "before_native_sha":digest(rows),
+       "no_formal_prediction_credit":True,
+       "natural_credit":0,"oos_credit":0,"native_write_performed":False,
+       "skip_native_stage_write":True,
+       "handoff_contract":"RESUME_IDENTICAL_OWNED_PENDING_ONLY_VERIFY_STAGE_THEN_ONE_CELL_PROMOTION"
+    }
+    return {"decision":"RESUME_PENDING_STAGE_ALREADY_NATIVE_NO_DUPLICATE_WRITE",
+            "stage_manifest":manifest,
+            "run_id":draft["run_id_dependency"],
+            "target_date":target,"expected_lease_token":lease["writer_token"],
+            "native_row_index_0based":idx,
+            "next_step":"Never call stage_request again: pass stage_manifest to verify-stage with fresh native readback; only then may issue C-only promotion.",
+            "native_write_performed":False,
+            "natural_credit":0,"oos_credit":0,
+            "formal_forecast_eligible":False}
+
 def prepare(snapshot,before,lease,prepared_at):
     draft=assess(snapshot)
     if draft["decision"]!="READY_FOR_SEPARATE_NATIVE_WRITE_AND_READBACK":
@@ -141,8 +211,7 @@ def prepare(snapshot,before,lease,prepared_at):
     target=draft["row"][0]
     matching=[(i,r) for i,r in enumerate(rows[1:],start=2) if r[0]==target]
     if matching:
-        return hold("EXISTING_TARGET_NEEDS_IDEMPOTENCY_OR_CONFLICT_RECONCILIATION",
-                    existing_rows=[i for i,r in matching])
+        return resume_pending_target(rows,draft,lease,snapshot,before["captured_at"])
     if any(r[1]==draft["row"][1] for r in rows[1:] if len(r)>1):
         return hold("DUPLICATE_CONFIG_ID_NEVER_REWRITE")
     if len(rows)>=200:
@@ -386,6 +455,44 @@ def selftest():
     future_final["captured_at"]="2026-10-14T19:30:00+08:00"
     check("reject_future_timestamp_final_sheet",
           verify_final(plan,future_final,lease,"2026-10-14T19:29:30+08:00").get("reason")=="FUTURE_FINAL_SHEET_CAPTURE")
+    # Actual physical target already has pending row when the same lease
+    # retries; report may only be resumed, NEVER appended twice.
+    resumed=prepare(ss,stage,lease,"2026-10-14T19:29:10+08:00")
+    check("same_owned_pending_is_resume",resumed.get("decision")==
+          "RESUME_PENDING_STAGE_ALREADY_NATIVE_NO_DUPLICATE_WRITE")
+    check("resume_prohibits_duplicate_append",
+          resumed.get("stage_manifest",{}).get("stage_request") is None and
+          resumed.get("stage_manifest",{}).get("skip_native_stage_write") is True)
+    check("resume_preserves_original_native_seal_time",
+          resumed["stage_manifest"]["stage_row"][3]==plan["stage_row"][3])
+    check("resume_does_not_mint_formal",
+          resumed["natural_credit"]==resumed["oos_credit"]==0 and
+          resumed["formal_forecast_eligible"] is False)
+    check("resume_can_reverify_native_pending",
+          verify_stage(resumed["stage_manifest"],stage,lease,
+                       "2026-10-14T19:29:15+08:00")["decision"]==
+          "NATIVE_STAGE_EXACT_PASS_PROMOTE_ONE_CELL_NEXT")
+    stage_wrong_token=copy.deepcopy(stage)
+    stage_wrong_token["rows"][-1][21]=stage_wrong_token["rows"][-1][21].replace(
+        "LEASE="+lease["writer_token"],"LEASE=UNKNOWN-OTHER-WRITER")
+    check("reject_other_writer_pending_token",
+          prepare(ss,stage_wrong_token,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    stage_wrong_hash=copy.deepcopy(stage)
+    stage_wrong_hash["rows"][-1][19]="0"*64
+    check("reject_foreign_pending_config_hash",
+          prepare(ss,stage_wrong_hash,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    stage_wrong_source=copy.deepcopy(stage)
+    stage_wrong_source["rows"][-1][10]="1"*64
+    check("reject_pending_nonstatus_field_change",
+          prepare(ss,stage_wrong_source,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    stage_fake_future=copy.deepcopy(stage)
+    stage_fake_future["rows"][-1][3]="2026-10-15 08:10:00 Asia/Taipei"
+    check("reject_pending_original_seal_after_cutoff",
+          prepare(ss,stage_fake_future,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    duplicate_pending=copy.deepcopy(stage)
+    duplicate_pending["rows"].append(plan["stage_row"])
+    check("reject_two_pending_rows_no_takeover",
+          prepare(ss,duplicate_pending,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
     status="PASS" if all(tests.values()) else "FAIL"
     return {"status":status,"passed":sum(tests.values()),"total":len(tests),
             "test_scope":"SYNTHETIC_TWO_PHASE_CONNECTOR_REQUEST_NO_NATIVE_EXTERNAL_WRITE_NO_FORECAST_NATURAL",

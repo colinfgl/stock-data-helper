@@ -1,7 +1,7 @@
 name: stock-nextday-config-native-handoff-qa
 on:
   push:
-    branches: [stock-nextday-native-config-handoff-20261014, stock-nextday-cutoff-stage-readback-20261014]
+    branches: [stock-nextday-native-config-handoff-20261014, stock-nextday-cutoff-stage-readback-20261014, stock-sealer-resume-pending-20261014]
     paths:
       - 'scripts/stock_nextday_config_native_handoff_v1_20261014.py'
       - 'scripts/stock_nextday_config_preseal_gate_v2_20261014.py'
@@ -27,7 +27,7 @@ jobs:
           x=json.load(open('native_sealer_qa/planner36.json'))
           assert x['status']=='PASS' and x['passed']==x['total']==36,x
           PY
-      - name: Verify exact 24-column native two-phase payload and 46 failure/positive guards
+      - name: Verify exact 24-column native two-phase payload and 56 failure/positive guards
         run: |
           python -m py_compile scripts/stock_nextday_config_native_handoff_v1_20261014.py
           python scripts/stock_nextday_config_native_handoff_v1_20261014.py \
@@ -35,7 +35,7 @@ jobs:
           python - <<'PY'
           import json
           x=json.load(open('native_sealer_qa/native_stage_readback.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==46,x
+          assert x['status']=='PASS' and x['passed']==x['total']==56,x
           assert x['test_scope']=='SYNTHETIC_TWO_PHASE_CONNECTOR_REQUEST_NO_NATIVE_EXTERNAL_WRITE_NO_FORECAST_NATURAL'
           assert x['example_stage_request']['updateCells']['range']['sheetId']==508116522
           assert x['example_stage_request']['updateCells']['range']['startColumnIndex']==0
@@ -45,7 +45,7 @@ jobs:
           commit=x['example_promotion_request']['updateCells']
           assert commit['range']['startColumnIndex']==2 and commit['range']['endColumnIndex']==3
           assert commit['rows'][0]['values'][0]['userEnteredValue']['stringValue']=='PRESEALED'
-          print('46 cases; post-08:10/future stamped receipts held; 24-cell pending stage; readback; one-cell activation; final readback; Natural/OOS=0')
+          print('56 cases; single-lease safe pending resume without duplicate append; post-08:10/future stamped receipts held; 24-cell pending stage; readback; one-cell activation; final readback; Natural/OOS=0')
           PY
       - name: Archive exact synthetic contract and stage request
         if: always()
