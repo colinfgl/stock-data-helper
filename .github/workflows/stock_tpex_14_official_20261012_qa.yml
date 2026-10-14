@@ -1,0 +1,63 @@
+name: stock-tpex-20261012-14-failed-original-bounded-recovery
+on:
+  push:
+    branches: [stock-official-matured1012-1013-backfill-20261014]
+    paths:
+      - 'scripts/stock_tpex_14_symbol_official_20261012_recovery.py'
+      - '.github/workflows/stock_tpex_14_official_20261012_qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-only-no-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile original strict source and per-symbol code
+        run: |
+          python -m py_compile scripts/stock_official_actual_afterclose_v1_20261014.py \
+            scripts/stock_tpex_14_symbol_official_20261012_recovery.py
+      - name: Fetch exact 2026-10-12 first-party TPEx 14 codes without second-hand fallback
+        continue-on-error: true
+        run: |
+          python scripts/stock_tpex_14_symbol_official_20261012_recovery.py \
+            --out tpex_20261012_14_original
+      - name: Check original SHA receipts and each official acquired line; partial is honest HOLD
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('tpex_20261012_14_original')
+          path=root/'tpex_original_14_recovery.json'
+          if not path.exists():
+              print('NO_RESEARCH_REPORT_WRITE_SOURCE_HOLD')
+              raise SystemExit(0)
+          a=json.loads(path.read_bytes())
+          assert a['session']=='2026-10-12' and len(a['rows'])==14 and len(set(a['expected_symbols']))==14
+          assert not a['canonical_outcome_written'] and not a['formal_prediction_written']
+          assert a['natural_credit']==a['oos_credit']==0
+          for z in a['rows']:
+              if z['qualified']:
+                  sym=z['symbol']; f=root/('tpex_'+sym+'_original.json')
+                  assert hashlib.sha256(f.read_bytes()).hexdigest()==z['sourceSHA'],sym
+                  assert z['result']['symbol']==sym and z['result']['close']>0
+          assert a['pass']+a['hold']==14
+          print('TPEX_1012_RECOVERY_EXACT',a['pass'],'PASS',a['hold'],'HOLD_NO_FORMAL')
+          PY
+      - name: Archive actual raw original even if partial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-tpex1012-14-bounded-primary-${{ github.run_id }}
+          path: tpex_20261012_14_original/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Research and governance separation
+        if: always()
+        run: |
+          echo 'One-shot TPEx 20261012 original missing-14 repair, no change to 19:00 natural stock settlement task, 20:45 collector, formal Outcome or preopen prediction.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Missing source, duplicate security, HTTP partial or date drift is per-symbol HOLD, not fabricated 0 or an official actual.' >> "$GITHUB_STEP_SUMMARY"
