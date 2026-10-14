@@ -8,7 +8,7 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
+    branches: [stock-source-report-continuity-20261014, stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
@@ -19,6 +19,7 @@ on:
       - 'scripts/stock_network_partial_retry_guard_20261013.py'
       - 'scripts/stock_dual_origin_prior_close_research_v1_20261013.py'
       - 'scripts/stock_three_original_prior_close_research_20261014.py'
+      - 'scripts/stock_source_report_continuity_v1_20261014.py'
       - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
 permissions:
@@ -127,6 +128,16 @@ jobs:
           assert x['status']=='PASS' and x['passed']==x['total']==22,x
           assert x['scope']=='SYNTHETIC_PURE_GATE_NO_GITHUB_API_OR_FORMAL_NATURAL'
           PY
+      - name: Validate 23 research report continuity and receipt guards
+        run: |
+          python -m py_compile scripts/stock_source_report_continuity_v1_20261014.py
+          python scripts/stock_source_report_continuity_v1_20261014.py --self-test > source_gate_qa/source_delivery23_tests.json
+          python - <<'PY'
+          import json
+          a=json.load(open('source_gate_qa/source_delivery23_tests.json'))
+          assert a['status']=='PASS' and a['passed']==a['total']==23,a
+          assert a['scope']=='SYNTHETIC_REPORT_ONLY_NO_FORMAL_NO_NATURAL_NO_PLATFORM_DELIVERY'
+          PY
       - name: Preserve reusable unit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -143,6 +154,7 @@ jobs:
             scripts/stock_three_original_prior_close_research_20261014.py
             scripts/stock_taiex_14gap_research_v1_20261013.py
             scripts/stock_source_trigger_guard_v2_20261013.py
+            scripts/stock_source_report_continuity_v1_20261014.py
           retention-days: 30
           if-no-files-found: error
   three-original-archived-replay-20261014:
@@ -471,6 +483,22 @@ jobs:
             --out stock_next_session_original_source/taiex_historical_gap14
           if [ -f stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md ]; then
             cat stock_next_session_original_source/taiex_historical_gap14/taiex_14gap_source.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Freeze separate human-readable 68-symbol research report with SHA readback
+        if: always()
+        continue-on-error: true
+        env:
+          RUN_TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          python scripts/stock_source_report_continuity_v1_20261014.py \
+            --partial stock_next_session_original_source/verified_partial/per_symbol_fallback.json \
+            --triple stock_next_session_original_source/three_original_research/three_original_research_68.json \
+            --out stock_next_session_original_source/report_continuity \
+            --trigger "$RUN_TRIGGER_EVENT"
+          f=stock_next_session_original_source/report_continuity/source_delivery_report.md
+          if [ -f "$f" ]; then
+            echo '## Full research source report (separate from Formal 68 original gate)' >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Preserve all raw original bytes and all failed-symbol receipts
         if: always()
