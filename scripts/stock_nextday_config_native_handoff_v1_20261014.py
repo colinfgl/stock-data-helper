@@ -198,6 +198,10 @@ def prepare(snapshot,before,lease,prepared_at):
         return hold("LATE_NATIVE_STAGE_AFTER_TARGET_0810")
     if not live_lease(lease,prepared_at):
         return hold("NO_FRESH_OWNED_ACTIVE_NATIVE_LEASE")
+    original_writer=snapshot.get("writer") or {}
+    if (original_writer.get("state")=="ACTIVE_OWNED"
+        and original_writer.get("active_lease_token")!=lease["writer_token"]):
+        return hold("PLANNER_OWNER_TOKEN_DIFFERS_FROM_PHYSICAL_NATIVE_LEASE")
     when=valid_clock(prepared_at)
     requested=valid_clock(snapshot.get("requested_at"))
     if when is None or requested is None or when<requested:
@@ -493,6 +497,29 @@ def selftest():
     duplicate_pending["rows"].append(plan["stage_row"])
     check("reject_two_pending_rows_no_takeover",
           prepare(ss,duplicate_pending,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    # A genuine fresh retry will read the writer as ACTIVE_OWNED, not FREE.
+    # The planner and native holder must verify the SAME owner token.
+    owned=copy.deepcopy(ss)
+    owned["writer"].update(state="ACTIVE_OWNED",
+                           active_lease_token=lease["writer_token"],
+                           same_scope_owner=True,lease_exact_readback=True,
+                           no_competing_active_writer=True)
+    recovered=prepare(owned,stage,lease,"2026-10-14T19:29:10+08:00")
+    check("fresh_owned_active_snapshot_true_resume",
+          recovered.get("decision")=="RESUME_PENDING_STAGE_ALREADY_NATIVE_NO_DUPLICATE_WRITE")
+    owner_changed=copy.deepcopy(owned)
+    owner_changed["writer"]["active_lease_token"]="STOCK-WRITE-DIFFERENT-OWNER"
+    check("reject_valid_looking_other_owner_token",
+          prepare(owner_changed,stage,lease,"2026-10-14T19:29:10+08:00")
+          .get("reason")=="PLANNER_OWNER_TOKEN_DIFFERS_FROM_PHYSICAL_NATIVE_LEASE")
+    owner_unverified=copy.deepcopy(owned)
+    owner_unverified["writer"]["lease_exact_readback"]=False
+    check("reject_owned_snapshot_without_live_lease_readback",
+          prepare(owner_unverified,stage,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
+    owner_competing=copy.deepcopy(owned)
+    owner_competing["writer"]["no_competing_active_writer"]=False
+    check("reject_owned_snapshot_competing_writer",
+          prepare(owner_competing,stage,lease,"2026-10-14T19:29:10+08:00")["decision"]=="HOLD")
     status="PASS" if all(tests.values()) else "FAIL"
     return {"status":status,"passed":sum(tests.values()),"total":len(tests),
             "test_scope":"SYNTHETIC_TWO_PHASE_CONNECTOR_REQUEST_NO_NATIVE_EXTERNAL_WRITE_NO_FORECAST_NATURAL",
