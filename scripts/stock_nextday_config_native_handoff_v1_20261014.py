@@ -52,6 +52,16 @@ def live_lease(lease,time):
             and lease["writer_token"].startswith("STOCK-WRITE-")
             and lease.get("no_competing_active_writer") is True)
 
+def before_target_preopen(target_date,checked_at):
+    """Never create/validate a newly operative config after 08:10 local."""
+    try:
+        target=dt.date.fromisoformat(str(target_date))
+    except (TypeError,ValueError):
+        return False
+    instant=valid_clock(checked_at)
+    return (instant is not None
+            and instant<dt.datetime.combine(target,dt.time(8,10),TZ))
+
 def sheet_data(sheet,minimum_time):
     """Confirm the caller read exactly the full canonical native physical range."""
     if not isinstance(sheet,dict):
@@ -114,6 +124,8 @@ def prepare(snapshot,before,lease,prepared_at):
     draft=assess(snapshot)
     if draft["decision"]!="READY_FOR_SEPARATE_NATIVE_WRITE_AND_READBACK":
         return hold("PLAN_GOVERNANCE_HOLD",underlying=draft.get("reasons",[]))
+    if not before_target_preopen(draft["row"][0],prepared_at):
+        return hold("LATE_NATIVE_STAGE_AFTER_TARGET_0810")
     if not live_lease(lease,prepared_at):
         return hold("NO_FRESH_OWNED_ACTIVE_NATIVE_LEASE")
     when=valid_clock(prepared_at)
@@ -165,12 +177,16 @@ def prepare(snapshot,before,lease,prepared_at):
 def verify_stage(manifest,after,lease,checked_at):
     if not isinstance(manifest,dict) or manifest.get("decision")!="STAGE_REQUEST_READY_NOT_EXECUTED":
         return hold("NOT_VALIDATED_STAGE_PLAN")
+    if not before_target_preopen(manifest.get("target_date"),checked_at):
+        return hold("POST_0810_STAGE_PROMOTION_FORBIDDEN")
     if not live_lease(lease,checked_at) or lease["writer_token"]!=manifest.get("expected_lease_token"):
         return hold("LEASE_UNVERIFIED_AT_STAGE_READBACK")
     try:
         rows,t=sheet_data(after,lease["acquired_at"])
     except ValueError as exc:
         return hold(str(exc))
+    if t>valid_clock(checked_at):
+        return hold("FUTURE_STAGE_SHEET_CAPTURE")
     index=manifest["native_row_index_0based"]
     if index>=len(rows):
         return hold("NATIVE_STAGE_ROW_NOT_READ_BACK")
@@ -197,12 +213,16 @@ def verify_stage(manifest,after,lease,checked_at):
 def verify_final(manifest,after,lease,checked_at):
     if not isinstance(manifest,dict) or manifest.get("decision")!="STAGE_REQUEST_READY_NOT_EXECUTED":
         return hold("NO_PRIOR_VERIFIED_STAGE_MANIFEST")
+    if not before_target_preopen(manifest.get("target_date"),checked_at):
+        return hold("POST_0810_FINAL_READBACK_CANNOT_SEAL")
     if not live_lease(lease,checked_at) or lease["writer_token"]!=manifest.get("expected_lease_token"):
         return hold("LEASE_UNVERIFIED_AT_FINAL_READBACK")
     try:
         rows,t=sheet_data(after,lease["acquired_at"])
     except ValueError as exc:
         return hold(str(exc))
+    if t>valid_clock(checked_at):
+        return hold("FUTURE_FINAL_SHEET_CAPTURE")
     idx=manifest["native_row_index_0based"]
     if idx>=len(rows):return hold("FINAL_ROW_NOT_PRESENT")
     want=manifest["stage_row"][:];want[2]=ACTIVE
@@ -352,6 +372,20 @@ def selftest():
     check("reject_final_not_promoted",verify_final(plan,wrong,lease,"2026-10-14T19:29:30+08:00")["decision"]=="HOLD")
     wrong=copy.deepcopy(final);wrong["rows"].append(["2026-10-15","OTHER","PRESEALED"])
     check("reject_duplicate_seal_final",verify_final(plan,wrong,lease,"2026-10-14T19:29:30+08:00")["decision"]=="HOLD")
+    check("reject_prepare_after_target_preopen",
+          prepare(ss,pre,lease,"2026-10-15T08:10:00+08:00").get("reason")=="LATE_NATIVE_STAGE_AFTER_TARGET_0810")
+    check("reject_stage_readback_after_target_preopen",
+          verify_stage(plan,stage,lease,"2026-10-15T08:10:00+08:00").get("reason")=="POST_0810_STAGE_PROMOTION_FORBIDDEN")
+    check("reject_final_readback_after_target_preopen",
+          verify_final(plan,final,lease,"2026-10-15T08:10:00+08:00").get("reason")=="POST_0810_FINAL_READBACK_CANNOT_SEAL")
+    future_stage=copy.deepcopy(stage)
+    future_stage["captured_at"]="2026-10-14T19:29:00+08:00"
+    check("reject_future_timestamp_stage_sheet",
+          verify_stage(plan,future_stage,lease,"2026-10-14T19:28:30+08:00").get("reason")=="FUTURE_STAGE_SHEET_CAPTURE")
+    future_final=copy.deepcopy(final)
+    future_final["captured_at"]="2026-10-14T19:30:00+08:00"
+    check("reject_future_timestamp_final_sheet",
+          verify_final(plan,future_final,lease,"2026-10-14T19:29:30+08:00").get("reason")=="FUTURE_FINAL_SHEET_CAPTURE")
     status="PASS" if all(tests.values()) else "FAIL"
     return {"status":status,"passed":sum(tests.values()),"total":len(tests),
             "test_scope":"SYNTHETIC_TWO_PHASE_CONNECTOR_REQUEST_NO_NATIVE_EXTERNAL_WRITE_NO_FORECAST_NATURAL",
