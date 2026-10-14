@@ -109,7 +109,10 @@ def taiex_row(doc,date):
     for row in doc.get("data",[]):
         ensure(isinstance(row,list) and len(row)>max(ix),"TAIEX_ROW_SCHEMA")
         rday=dayparse(row[ix[0]])
-        ensure(rday<=date,"TAIEX_FUTURE_DATE_CONTAMINATION")
+        # TWSE monthly history returned during a retrospective afterclose read
+        # may already contain LATER sessions. Never use those rows as the
+        # target outcome, but do not reject the genuine target row because of
+        # its presence. This AFTERCLOSE-only parser never issues a forecast.
         if rday!=date:continue
         vals=[positive(row[i]) for i in ix[1:]]
         ensure(all(x is not None for x in vals),"TAIEX_NONNUMERIC_VALUE")
@@ -255,11 +258,19 @@ def test():
     fi={"date":"20261014","stat":"OK","fields":["日期","開盤指數","最高指數","最低指數","收盤指數"],
         "data":[["115/10/14","48000","49000","47800","48800"]]}
     chk("real_ohlc_parser",lambda:taiex_row(fi,d)["close"]==48800)
+    chk("historical_month_future_rows_do_not_block_target",
+        lambda:taiex_row(dict(fi,data=fi["data"]+[
+            ["115/10/15","50000","50500","49700","50020"]]),d)["close"]==48800)
+    chk("future_month_row_cannot_become_historical_actual",
+        lambda:taiex_row(dict(fi,data=[
+            ["115/10/12","50000","50500","49700","50020"],
+            ["115/10/14","48000","49000","47800","48800"]]),d)["close"]==48800)
+
     chk("tai_ex_future_illegal",lambda:taiex_row(dict(fi,data=[["115/10/15","48000","49000","47800","48800"]]),d),True)
     chk("tai_ex_bad_high_low",lambda:taiex_row(dict(fi,data=[["115/10/14","48000","47000","47800","48800"]]),d),True)
     chk("tai_ex_dup_target",lambda:taiex_row(dict(fi,data=fi["data"]*2),d),True)
     chk("prevent_vendor_quote_as_primary",lambda:strict(b'{"provenance":"YAHOO","date":"20261014","stat":"BAD"}')["stat"]!="OK")
-    result={"status":"PASS" if len(cases)==15 and all(cases.values()) else "FAIL",
+    result={"status":"PASS" if len(cases)==17 and all(cases.values()) else "FAIL",
             "passed":sum(cases.values()),"total":len(cases),"checks":cases,
             "scope":"SYNTHETIC_PARSE_TEST_ONLY_NO_ONLINE_NO_NATURAL"}
     return result

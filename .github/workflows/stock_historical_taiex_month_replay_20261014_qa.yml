@@ -1,0 +1,83 @@
+name: stock-historical-taiex-month-real-original-qa
+on:
+  push:
+    branches: [stock-historical-taiex-month-index-20261014]
+    paths:
+      - 'scripts/stock_official_actual_afterclose_v1_20261014.py'
+      - '.github/workflows/stock_historical_taiex_month_replay_20261014_qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-original-two-day:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: New parser 17/17 strict tests including future month bar isolation
+        run: |
+          python -m py_compile scripts/stock_official_actual_afterclose_v1_20261014.py
+          python scripts/stock_official_actual_afterclose_v1_20261014.py --self-test > taiex_test17.json
+          python - <<'PY'
+          import json
+          d=json.load(open('taiex_test17.json'))
+          assert d['status']=='PASS' and d['passed']==d['total']==17,d
+          PY
+      - name: Retrieve genuine archived first-party 2026-10-12 and 10-13 monthly index source
+        uses: actions/download-artifact@v4
+        with:
+          repository: colinfgl/stock-data-helper
+          run-id: 38552691358
+          name: stock-maturity-original1012-1013-38552691358
+          github-token: ${{ github.token }}
+          path: month_orig
+      - name: Validate two archived original SHA and unique exact-date OHLC, not later sessions
+        run: |
+          PYTHONPATH=scripts python - <<'PY'
+          import datetime as dt,hashlib,json,pathlib
+          from stock_official_actual_afterclose_v1_20261014 import strict,taiex_row
+          expectations=[
+              ('20261012','7974ae90694d5602873cb29a3d7b61479e35d54a52c04e16e03a0907f0b5f1f9',
+               {'open':49272.08,'high':49412.9,'low':48768.82,'close':49301.96}),
+              ('20261013','521f9e2447823f05dc74ad8273f58055cd83ff0fb2e791702c58fa5562b93e9e',
+               {'open':49126.27,'high':49126.27,'low':48066.36,'close':48341.31})]
+          proof=[]
+          for day,h,expected in expectations:
+              fp=pathlib.Path('month_orig')/('official_maturity_'+day)/'originals'/'ohlc.json'
+              original=fp.read_bytes()
+              assert hashlib.sha256(original).hexdigest()==h,day
+              original_doc=strict(original)
+              date=dt.datetime.strptime(day,'%Y%m%d').date()
+              actual=taiex_row(original_doc,date)
+              assert actual==expected,(day,actual,expected)
+              assert original_doc['date']==day
+              # Raw 2026/10/14 row must remain excluded from both historical results
+              assert actual['close']!=48625.83
+              proof.append({'date':day,'index_ohlc':actual,'sha256':h,
+                            'first_party':True,'formal_prediction_written':False,
+                            'natural_credit':0,'oos_credit':0})
+          p=pathlib.Path('taiex_month_real_original_readback.json')
+          raw=json.dumps(proof,ensure_ascii=False,sort_keys=True,indent=2)+'\n'
+          p.write_text(raw,encoding='utf8')
+          assert p.read_bytes()==raw.encode()
+          print('REAL_MONTH_TAIEX_TWO_DATES_SHA_AND_UNIQUE_ROW_PASS',raw)
+          PY
+      - name: Save dated real-source evidence and test trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-taiex-historic-1012-1013-exact-${{ github.run_id }}
+          path: |
+            taiex_test17.json
+            taiex_month_real_original_readback.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: No natural forecast or original receipt promotion
+        if: always()
+        run: |
+          echo 'Verified genuine already-archived first-party exact-date TAIEX OHLC 2026-10-12/13 as AFTERCLOSE research only. Later rows in monthly response were excluded by exact target date.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Original source bytes and SHA retained; no new 08:10 forecast/Config/Outcome, no Formal/Natural/OOS and no new scheduled tasks.' >> "$GITHUB_STEP_SUMMARY"
