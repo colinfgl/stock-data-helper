@@ -1,0 +1,49 @@
+name: stock-nextsession-config-sealer-v2-synthetic-qa
+on:
+  workflow_dispatch:
+  push:
+    branches: [stock-nextday-sealer-v2-20261014]
+    paths:
+      - '.github/workflows/stock_nextday_config_sealer_v2_20261014.yml'
+      - 'scripts/stock_nextday_config_preseal_gate_v2_20261014.py'
+permissions:
+  contents: read
+jobs:
+  governance-preseal-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and verify multi-day Config-hash and fail-closed guards
+        run: |
+          mkdir -p stock_nextday_cfg_v2_qa
+          python -m py_compile scripts/stock_nextday_config_preseal_gate_v2_20261014.py
+          python scripts/stock_nextday_config_preseal_gate_v2_20261014.py --self-test --output stock_nextday_cfg_v2_qa/result.json
+          python - <<'PY'
+          import json
+          x=json.load(open('stock_nextday_cfg_v2_qa/result.json',encoding='utf-8'))
+          assert x['status']=='PASS',x
+          assert x['passed']==x['total'] and x['total']>=34,x
+          assert x['checks']['historic_v2_hash_contract'] is True
+          assert x['checks']['no_formal_natural_oos'] is True
+          assert x['scope']=='SYNTHETIC_AND_HISTORIC_HASH_CHECK_NO_EXTERNAL_FETCH_NO_SHEETS_WRITE_NO_FORMAL_NATURAL_OOS'
+          PY
+      - name: Preserve QA evidence and exact source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-nextday-preseal-v2-qa
+          path: |
+            stock_nextday_cfg_v2_qa/
+            scripts/stock_nextday_config_preseal_gate_v2_20261014.py
+          retention-days: 30
+          if-no-files-found: error
+      - name: Truthful research-only scope
+        if: always()
+        run: |
+          echo "This is an immutable, date-generic ConfigSealer *planner*; the GitHub test has no credentials for the private live STOCK authority." >> "$GITHUB_STEP_SUMMARY"
+          echo "It cannot create PRESEALED Config rows, install itself in ChatGPT 08:10/19:00 workers, close CURRENT/TODO R29-R33 drift, alter original ForecastSHA, or increase Natural/OOS." >> "$GITHUB_STEP_SUMMARY"
+          echo "Native 19:00 same-run terminal, authenticated official trading calendar, live authority, activated sealer, 24-cell writer lease and exact row readback are mandatory for any real future release." >> "$GITHUB_STEP_SUMMARY"
