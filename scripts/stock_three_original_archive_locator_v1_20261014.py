@@ -66,6 +66,11 @@ def selection(receipt,artifacts,current_run_id):
     first=dt.datetime.combine(prior,dt.time(0),TZ)
     end_prev=dt.datetime.combine(cur,dt.time(19),TZ)
     evening_start=end_prev
+    # Only independently archived captures from the PREVIOUS CALENDAR EVENING
+    # are eligible for the second original. Post-midnight recovery runs may
+    # repeat the same Yahoo NULLs as the current morning and are not a fresh
+    # previous-evening parent, even when their artifact ZIP is authentic.
+    evening_end=dt.datetime.combine(cur+dt.timedelta(days=1),dt.time(0),TZ)
     previous_candidates=[]
     evening_candidates=[]
     for art in artifacts:
@@ -83,7 +88,7 @@ def selection(receipt,artifacts,current_run_id):
             first<=when<end_prev):
             previous_candidates.append((when,int(rid),name))
         if (name==f"stock-next-session-68-source-raw-{rid}" and
-            evening_start<=when<started):
+            evening_start<=when<min(started,evening_end)):
             evening_candidates.append((when,int(rid),name))
     # Prefer closest complete-source artifact; all candidates are still
     # unauthenticated until raw acquisition_receipt + per-file SHA revalidation.
@@ -157,6 +162,7 @@ def selftest():
     test("no_prior_cross_day",lambda x,y:y[0].update(created_at="2026-10-13T19:10:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_evening_outside",lambda x,y:y[1].update(created_at="2026-10-13T18:59:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_future_archive",lambda x,y:y[1].update(created_at="2026-10-14T07:30:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
+    test("reject_following_morning_as_previous_evening",lambda x,y:y[1].update(created_at="2026-10-14T01:37:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_artifact_wrong_run",lambda x,y:y[0]["workflow_run"].update(id=2),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_artifact_missing_run",lambda x,y:y[0].pop("workflow_run"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("old_source_wrong_cutoff",lambda x,y:x["dates"].update(price_cutoff="20261012"),"HOLD_BAD_SOURCE_META")
@@ -172,7 +178,7 @@ def selftest():
     checks["three_orig_is_not_a_single_source"]=selection(original,art,"38483763642")["RawSourceVerified"] is False
     checks["no_native_prediction"]=selection(original,art,"38483763642")["NativePredictionWritten"] is False
     checks["selection_only_two_archive_roles"]=set(k for k in selection(original,art,"38483763642") if k.endswith("Artifact"))=={"PriorPublicInputArtifact","EveningArtifact"}
-    result={"status":"PASS" if all(checks.values()) and len(checks)==18 else "FAIL",
+    result={"status":"PASS" if all(checks.values()) and len(checks)==19 else "FAIL",
             "total":len(checks),"passed":sum(checks.values()),
             "scope":"SYNTHETIC_ARCHIVE_LOCATOR_NO_PRIVATE_DATA_NO_FORMAL",
             "checks":checks}
