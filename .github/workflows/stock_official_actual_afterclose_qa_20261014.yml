@@ -1,0 +1,72 @@
+name: stock-official-20261014-afterclose-original-research-once
+on:
+  push:
+    branches: [stock-official-actual-afterclose-20261014]
+    paths:
+      - 'scripts/stock_official_actual_afterclose_v1_20261014.py'
+      - '.github/workflows/stock_official_actual_afterclose_qa_20261014.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: stock-onetime-official-actual-research-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  exact-official-68-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and validate 15 fail-closed source-parser cases
+        run: |
+          mkdir -p stock_actual_1014_qa
+          python -m py_compile scripts/stock_official_actual_afterclose_v1_20261014.py
+          python scripts/stock_official_actual_afterclose_v1_20261014.py --self-test > stock_actual_1014_qa/parser15.json
+          python - <<'PY'
+          import json
+          x=json.load(open('stock_actual_1014_qa/parser15.json'))
+          print('Parser QA',x['status'],x['passed'],'of',x['total'])
+          assert x['status']=='PASS' and x['passed']==x['total']==15,x
+          PY
+      - name: Exact 2026-10-14 TWSE TPEx TAIEX first party afterclose raw capture
+        continue-on-error: true
+        run: |
+          python scripts/stock_official_actual_afterclose_v1_20261014.py \
+            --date 2026-10-14 --out stock_actual_1014_qa/captured
+      - name: Verify immutable source receipt after write, show actual completeness
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib,json,pathlib
+          p=pathlib.Path('stock_actual_1014_qa/captured/official_actual_research_68.json')
+          if not p.exists():
+            print('SOURCE_UNAVAILABLE_HOLD: no original file, not 0 nor prior prices')
+            raise SystemExit(0)
+          x=json.loads(p.read_bytes())
+          print('Native original research',x['target_date'],x['exact_ohlc_count'],'/68; index',x['taiex'])
+          assert x['target_date']=='2026-10-14' and x['universe']==68 and len(x['Rows'])==68
+          assert not x['formal_prediction_written'] and not x['canonical_outcome_written']
+          assert x['natural_credit']==x['oos_credit']==0
+          for name,src in x['originals'].items():
+            if src.get('sha256'):
+              file=p.parent/'originals'/(name+'.json')
+              assert hashlib.sha256(file.read_bytes()).hexdigest()==src['sha256'],(name,src)
+          print('Raw receipt SHA re-read exact, no Formal/Natural/OOS')
+          PY
+      - name: Preserve original source raw receipt / all 68 statuses, even on partial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-official-afterclose-1014-research-${{ github.run_id }}
+          path: stock_actual_1014_qa/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Truthful separation from ChatGPT and production
+        if: always()
+        run: |
+          echo 'One-off firstparty TWSE/TPEx historical actual RESEARCH capture, separate from original 20:45 source collector and 19:00 Settlement.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Individual exact-date original SHA is required. Missing venue stays symbol-level HOLD, not fabricated from Investing or Yahoo.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No canonical Outcome, no prior-day preopen prediction, no Cash/Trading rights, no Natural/OOS, no MessageReference, no new recurring schedule.' >> "$GITHUB_STEP_SUMMARY"
