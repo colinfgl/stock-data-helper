@@ -31,14 +31,14 @@ jobs:
           assert x['status']=='PASS' and x['total']==x['passed']==15,x
           assert x['scope']=='PURE_SYNTHETIC_GENERIC_MARKET_DATES_NO_FORMAL_NATURAL'
           PY
-      - name: Verify 18 next-session archive locator decision cases
+      - name: Verify 19 next-session archive locator decision cases
         run: |
           python -m py_compile scripts/stock_three_original_archive_locator_v1_20261014.py
-          python scripts/stock_three_original_archive_locator_v1_20261014.py --self-test > generic_three_qa/18_locator_tests.json
+          python scripts/stock_three_original_archive_locator_v1_20261014.py --self-test > generic_three_qa/19_locator_tests.json
           python - <<'PY'
           import json
-          x=json.load(open('generic_three_qa/18_locator_tests.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==18,x
+          x=json.load(open('generic_three_qa/19_locator_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==19,x
           assert x['scope']=='SYNTHETIC_ARCHIVE_LOCATOR_NO_PRIVATE_DATA_NO_FORMAL'
           PY
       - uses: actions/download-artifact@v4
@@ -128,7 +128,7 @@ jobs:
           name: generic-three-original-real-68-${{ github.run_id }}
           path: |
             generic_three_qa/15_safety_tests.json
-            generic_three_qa/18_locator_tests.json
+            generic_three_qa/19_locator_tests.json
             generic_three_qa/real_archive_discovery.json
             generic_three_qa/out/
             generic_three_qa/report/
