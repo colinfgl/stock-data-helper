@@ -29,9 +29,9 @@ FIELDS = (
 )
 COLUMN_ORDER = (
     "TargetDate","ConfigID","Status","SealedAt","EffectiveFrom","DataRelease",
-    "RuntimeControl","CurrentID","TodoID","LatestID","LatestSHA","ControlSheetID",
-    "LedgerID","DataClosureSheet","PremarketTaskID","PremarketBootstrapSHA",
-    "SettlementTaskID","SettlementBootstrapSHA","FreezePolicy","ConfigHashSHA256",
+    "RuntimeControl","CurrentID","TodoID","LatestID","LatestSHA256","ControlSheetID",
+    "LedgerID","DataClosureTab","PremarketTaskID","PremarketBootstrapSHA256",
+    "SettlementTaskID","SettlementBootstrapSHA256","FreezePolicy","ConfigHashSHA256",
     "SupersededBy","Notes","GovernanceBundleID","GovernanceBundleSHA256"
 )
 
@@ -176,7 +176,7 @@ def assess(snapshot):
     return {"decision":"READY_FOR_SEPARATE_NATIVE_WRITE_AND_READBACK",
             "canonical_hash":cfg_hash,
             "column_order":list(COLUMN_ORDER),
-            "row":[data[c if c in data else ("LatestSHA256" if c=="LatestSHA" else c)] for c in COLUMN_ORDER],
+            "row":[data[c] for c in COLUMN_ORDER],
             "run_id_dependency":rid,
             "native_write":False,"natural_credit":0,"oos_credit":0,
             "formal_forecast_eligible":False,
