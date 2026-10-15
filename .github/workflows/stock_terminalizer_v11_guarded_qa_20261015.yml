@@ -1,0 +1,42 @@
+name: Stock terminalizer v11 guarded QA
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/stock_delivery_terminalizer_v11_20261014.py
+      - scripts/stock_delivery_terminalizer_v10_reference_20261012.py
+      - scripts/test_stock_delivery_terminalizer_v11_20261014.py
+      - .github/workflows/stock_terminalizer_v11_guarded_qa_20261015.yml
+  push:
+    branches:
+      - stock-terminalizer-v11-native-qa-20261015
+    paths:
+      - scripts/stock_delivery_terminalizer_v11_20261014.py
+      - scripts/stock_delivery_terminalizer_v10_reference_20261012.py
+      - scripts/test_stock_delivery_terminalizer_v11_20261014.py
+      - .github/workflows/stock_terminalizer_v11_guarded_qa_20261015.yml
+permissions:
+  contents: read
+jobs:
+  terminalizer-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run all fail-closed terminalizer tests
+        run: |
+          python -m py_compile scripts/stock_delivery_terminalizer_v11_20261014.py scripts/stock_delivery_terminalizer_v10_reference_20261012.py scripts/test_stock_delivery_terminalizer_v11_20261014.py
+          python scripts/test_stock_delivery_terminalizer_v11_20261014.py
+      - name: Assert synthetic QA passed 41 of 41
+        run: |
+          python - <<'PY'
+          import json
+          p='scripts/stock_terminalizer_v11_test_result_20261014.json'
+          d=json.load(open(p,encoding='utf-8'))
+          assert d['status']=='PASS' and d['passed']==d['total']==41, d
+          assert d['scope'].startswith('SYNTHETIC_CODE_TEST_ONLY'), d
+          print('PASS 41/41 synthetic tests, not deployed to ChatGPT schedule')
+          PY
