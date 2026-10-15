@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - scripts/stock_delivery_terminalizer_v11_20261014.py
+      - scripts/stock_delivery_terminalizer_v10_reference_20261012.py
       - scripts/test_stock_delivery_terminalizer_v11_20261014.py
       - .github/workflows/stock_terminalizer_v11_guarded_qa_20261015.yml
   push:
@@ -11,6 +12,7 @@ on:
       - stock-terminalizer-v11-native-qa-20261015
     paths:
       - scripts/stock_delivery_terminalizer_v11_20261014.py
+      - scripts/stock_delivery_terminalizer_v10_reference_20261012.py
       - scripts/test_stock_delivery_terminalizer_v11_20261014.py
       - .github/workflows/stock_terminalizer_v11_guarded_qa_20261015.yml
 permissions:
@@ -26,7 +28,7 @@ jobs:
           python-version: '3.11'
       - name: Compile and run all fail-closed terminalizer tests
         run: |
-          python -m py_compile scripts/stock_delivery_terminalizer_v11_20261014.py scripts/test_stock_delivery_terminalizer_v11_20261014.py
+          python -m py_compile scripts/stock_delivery_terminalizer_v11_20261014.py scripts/stock_delivery_terminalizer_v10_reference_20261012.py scripts/test_stock_delivery_terminalizer_v11_20261014.py
           python scripts/test_stock_delivery_terminalizer_v11_20261014.py
       - name: Assert synthetic QA passed 41 of 41
         run: |
