@@ -1,6 +1,11 @@
 name: Stock terminalizer v11 guarded QA
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/stock_delivery_terminalizer_v11_20261014.py
+      - scripts/test_stock_delivery_terminalizer_v11_20261014.py
+      - .github/workflows/stock_terminalizer_v11_guarded_qa_20261015.yml
   push:
     branches:
       - stock-terminalizer-v11-native-qa-20261015
