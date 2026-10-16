@@ -1,0 +1,34 @@
+name: stock-3481-primary-reduction-20261016-RESEARCH
+on:
+  push:
+    branches: [stock-3481-capital-reduction-primary-20261016]
+    paths:
+      - scripts/stock_3481_reduction_primary_20261016.py
+      - .github/workflows/stock_3481_reduction_primary_20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate source-only parser
+        run: python -m py_compile scripts/stock_3481_reduction_primary_20261016.py
+      - name: Fetch only 3481 2024-08-26 exact date source and keep evidence
+        run: python scripts/stock_3481_reduction_primary_20261016.py --out official_3481_20240826
+      - name: Archive original public source bytes and fail-closed report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3481-TWTAUU-20261016-${{ github.run_id }}
+          path: official_3481_20240826/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Prevent formal or natural credit
+        if: always()
+        run: echo 'Research-only official historical public archive; no original prediction, issuer-exhaustive claim, Cash, Formal, Natural, OOS or runtime write.' >> "$GITHUB_STEP_SUMMARY"
