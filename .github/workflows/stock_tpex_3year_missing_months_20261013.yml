@@ -1,8 +1,8 @@
-name: stock-TPEx-exdiv-35-missing-months-research-20261013
+name: stock-TPEx-exdiv-35-missing-months-research-20261016
 on:
   workflow_dispatch:
   push:
-    branches: [stock-tpex-exdiv-firstparty-20261013]
+    branches: [stock-tpex-official-history-20261016-remediate]
     paths:
       - '.github/workflows/stock_tpex_3year_missing_months_20261013.yml'
 permissions:
