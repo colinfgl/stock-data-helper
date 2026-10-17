@@ -1,0 +1,64 @@
+name: stock-5371-publish-verified-500-primary-ohlc-research-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - '.github/workflows/stock_5371_publish_verified_research_csv_20261017.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  archive-verified-csv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull exact immutable completed 25-period source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p source
+          gh run download 39000863128 --repo colinfgl/stock-data-helper -n 5371-TPEx-25months-39000863128 -D source
+      - name: Verify 500 original dates and all 25 SHA, write nonformal research CSV
+        run: |
+          python - <<'PY'
+          import csv,datetime as dt,hashlib,json,pathlib
+          p=pathlib.Path('source')
+          r=json.loads((p/'receipt.json').read_text())
+          d=json.loads((p/'official_5371_daily_ohlc_RESEARCH_ONLY.json').read_text())
+          assert r['status']=='PASS_COMPLETE_5371_TPEX_RAW_HISTORY_RESEARCH_ONLY'
+          assert r['num_months']==r['verified_months']==25 and r['raw_ohlc_rows']==len(d)==500
+          assert len({z['date'] for z in d})==500 and d[0]['date']=='2024-08-01' and d[-1]['date']=='2026-08-21'
+          assert d[-1]['close']==83.5 and r['last']['close']==83.5
+          months={}
+          for x in r['period_receipts']:
+              b=(p/x['file']).read_bytes()
+              assert hashlib.sha256(b).hexdigest()==x['raw_sha256'] and x['status']=='PASS_PRIMARY_EXACT_MONTH'
+              months[x['month']]=x['raw_sha256']
+          assert len(months)==25
+          out=pathlib.Path('data/research');out.mkdir(parents=True,exist_ok=True)
+          target=out/'stock_5371_500_tpex_raw_20261017.csv'
+          with target.open('w',encoding='utf-8',newline='') as f:
+              w=csv.writer(f);w.writerow(['date','symbol','open','high','low','close','period','official_month_sha256'])
+              for z in d:
+                  day=z['date'];period=day[:7]
+                  assert period in months and z['symbol']=='5371'
+                  assert z['low']<=min(z['open'],z['close'])<=max(z['open'],z['close'])<=z['high']
+                  w.writerow([day,z['symbol'],z['open'],z['high'],z['low'],z['close'],period,months[period]])
+          js={'qualification':'RESEARCH_ONLY_TPEX_RAW_OHLC_500','forecast_modified':False,'formal_OOS_credit':0,
+              'source_github_run':39000863128,'source_archive_drive':'https://drive.google.com/file/d/1c1bq_KG_lmLDRQqgg7zZ5KlN3ua_MO6Z/view',
+              'date_first':'2024-08-01','date_last':'2026-08-21','event':'5371 to 3718 1:1 2026-09-03','months':r['period_receipts'],
+              'csv_sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
+          (out/'stock_5371_500_tpex_manifest_20261017.json').write_text(json.dumps(js,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('PASS_500_OF_500_PRIMARY_SOURCE_VERIFIED',js['csv_sha256'])
+          PY
+      - name: Commit immutable research CSV only to dedicated branch
+        run: |
+          git config user.name "research-evidence-bot"
+          git config user.email "research-evidence-bot@users.noreply.github.com"
+          git add data/research/stock_5371_500_tpex_raw_20261017.csv data/research/stock_5371_500_tpex_manifest_20261017.json
+          if git diff --cached --quiet; then echo 'NO_OP_ALREADY_SAME_RESEARCH_CSV'; else
+            git commit -m "data(research): TPEx verified 5371 500 official daily OHLC in 25 periods"
+            git push origin HEAD:stock-3718-5371-primary-lineage-20261017
+          fi
