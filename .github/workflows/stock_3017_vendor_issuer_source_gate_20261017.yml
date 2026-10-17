@@ -1,0 +1,63 @@
+name: stock-vendor-vs-issuer-3017-raw-dividend-gate-20261017
+on:
+  push:
+    branches: [stock-3017-vendor-issuer-source-gate-20261017]
+    paths:
+      - 'scripts/stock_vendor_issuer_dividend_gate_20261017.py'
+      - 'research/stock_3017_20250819_issuer_vendor_manifest_20261017.json'
+      - '.github/workflows/stock_3017_vendor_issuer_source_gate_20261017.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-issuer-vendor-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and verify synthetic fail-closed QA
+        run: |
+          python -m py_compile scripts/stock_vendor_issuer_dividend_gate_20261017.py
+          python scripts/stock_vendor_issuer_dividend_gate_20261017.py --self-test
+          python scripts/stock_dividend_factor_reconciliation_v1_20261013.py --self-test
+      - name: Fetch pinned original 2026-10-16 chart 3017.TW from archived GitHub source run
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38936085384
+          run-id: 38936085384
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: archived_3017_input
+      - name: Run independent cross-source QA on real pinned bytes
+        run: |
+          python scripts/stock_vendor_issuer_dividend_gate_20261017.py \
+            --chart archived_3017_input/stock_next_session_original_source_raw/chart_3017.TW.json \
+            --symbol 3017.TW \
+            --issuer-evidence research/stock_3017_20250819_issuer_vendor_manifest_20261017.json \
+            --out research_receipts/3017_vendor_issuer_amount_gate_20261017.json
+          python - <<'PY'
+          import json
+          p='research_receipts/3017_vendor_issuer_amount_gate_20261017.json'
+          r=json.load(open(p,encoding='utf-8'))
+          assert r['VendorRawSHA256']=='56acccafdb7dcadec1c9627155efe151b7efee37f544d7683f90570e17dc2d3d'
+          assert r['Status']=='RESEARCH_VENDOR_ISSUER_AMOUNT_HOLD' and r['ConflictCount']==1
+          x=r['Rows'][0]
+          assert x['EventDate']=='2025-08-19' and x['VendorChartAmount']==9.934345
+          assert abs(x['DifferenceVendorMinusIssuer']-0.00397502)<1e-9
+          assert x['VendorInternalChartFactorStatus']=='MATCHED_INCLUDED_BY_THRESHOLD'
+          assert r['FormalEligible']==False and r['NaturalCredit']==0 and r['OOSCredit']==0
+          print('PASS original raw SHA + amount+ factor independent issuer conflict; Formal unchanged')
+          PY
+      - name: Save authentic raw and independent audit receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3017-yahoo-issuer-amount-gate-${{ github.run_id }}
+          path: |
+            research_receipts/
+            research/stock_3017_20250819_issuer_vendor_manifest_20261017.json
+            archived_3017_input/stock_next_session_original_source_raw/chart_3017.TW.json
+          if-no-files-found: warn
+          retention-days: 30

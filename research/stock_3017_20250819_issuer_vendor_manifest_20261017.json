@@ -1,0 +1,21 @@
+{
+  "Symbol": "3017.TW",
+  "VendorOriginalRawSHA256": "56acccafdb7dcadec1c9627155efe151b7efee37f544d7683f90570e17dc2d3d",
+  "FormalEligible": false,
+  "NaturalCredit": 0,
+  "OOSCredit": 0,
+  "IssuerEvents": [
+    {
+      "EventDate": "2025-08-19",
+      "IssuerFinalPerShare": 9.93036998,
+      "PublishedAt": "2025-07-29",
+      "EvidenceRole": "ISSUER_MOPS_REPRINT_SECONDARY",
+      "IssuerSourceRawSHA256": "c73fe103d73d6f6c0ddb70061635216f169a6f4634ebb81d56d52c5ac4e8d8a4",
+      "IssuerReprintURL": "https://www.moneydj.com/kmdj/news/newsviewer.aspx?a=1915de30-c6a7-4297-962a-95ca1a80a773",
+      "VendorPublicDividendURL": "https://tw.stock.yahoo.com/quote/3017/dividend",
+      "IssuerCapitalAndEarningsNote": "2025 final 9.93036998 total per share, Yahoo public dividend page rounded 9.9304, original chart 9.934345"
+    }
+  ],
+  "ResearchOnly": true,
+  "SourceScope": "Historical vendor-vs-secondary-MOPS-reprint QA. Not a complete legal event manifest or PIT formal source."
+}
