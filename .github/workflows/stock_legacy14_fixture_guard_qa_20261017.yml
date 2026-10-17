@@ -1,0 +1,38 @@
+name: stock-h9-historical-fixture-guard-qa-20261017
+on:
+  push:
+    branches: [stock-legacy14-20261017-failclosed-skip]
+    paths:
+      - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+      - '.github/workflows/stock_legacy14_fixture_guard_qa_20261017.yml'
+      - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
+permissions:
+  contents: read
+jobs:
+  fixture-date-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Historical 14-day original parser 12-of-12 regression QA
+        run: python scripts/stock_taiex_14gap_research_v1_20261013.py --self-test
+      - name: Verify old historical fixture allowed, later October skipped, no source gates bypassed
+        run: |
+          python - <<'PY'
+          import json, subprocess, tempfile, pathlib
+          source=pathlib.Path('.github/workflows/stock_daily_nextsession_source_closure_20261013.yml').read_text()
+          assert source.count('H9_LEGACY14_FIXTURE_SKIPPED')==1
+          assert source.count("oct_fixture_date=$(python -c")==1
+          assert "if [ \"$oct_fixture_date\" != '20261013' ]; then" in source
+          assert "No current-day source or model gate changed" in source
+          assert "assert x['status']=='RESEARCH_SOURCE_68_OF_68_READY_NOT_FORMAL'" in source
+          for fixture,execute in [('20261013',True),('20261016',False),('20261101',False)]:
+              with tempfile.TemporaryDirectory() as d:
+                  p=pathlib.Path(d)/'source.json';p.write_text(json.dumps({'date':fixture,'stat':'OK'}))
+                  txt=subprocess.check_output(['python','-c','import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8")).get("date",""))',str(p)],text=True).strip()
+                  assert (txt=='20261013')==execute,(fixture,txt)
+          print('PASS three fixture/date behavior checks; formal 68-source hard gate unchanged')
+          PY

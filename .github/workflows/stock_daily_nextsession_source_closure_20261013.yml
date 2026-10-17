@@ -502,6 +502,14 @@ jobs:
             echo 'H9_RESEARCH_INDEX14_HOLD: Oct firstparty original absent; preserve all other source receipts'
             exit 0
           fi
+          # This 14-gap historical recovery is the 2026-10-13 fixture, NOT a nightly source gate.
+          # Newer October monthly OHLC is legitimate and must not be rejected as a 10/13 row.
+          oct_fixture_date=$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("date",""))' "$oct" 2>/dev/null || true)
+          if [ "$oct_fixture_date" != '20261013' ]; then
+            echo "H9_LEGACY14_FIXTURE_SKIPPED: latest official October source date=$oct_fixture_date; historic 14-day input is already an independent archived research receipt." >> "$GITHUB_STEP_SUMMARY"
+            echo 'No current-day source or model gate changed: missing issuer/ETF adjusted-close must stay HOLD.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           python scripts/stock_taiex_14gap_research_v1_20261013.py \
             --oct-raw "$oct" \
             --out stock_next_session_original_source/taiex_historical_gap14
