@@ -17,7 +17,7 @@ def verify(raw):
  assert str(meta.get("symbol"))==CODE,"VENDOR_SYMBOL_MISMATCH"
  times=z.get("timestamp") or [];quote=((z.get("indicators") or {}).get("quote") or [{}])[0]
  close=quote.get("close") or []
- adj=(((z.get("indicators") or {}).get("adjclose") or [{}])[0]).get("adjclose") or [])
+ adj=(((z.get("indicators") or {}).get("adjclose") or [{}])[0]).get("adjclose") or []
  assert len(times)==len(close) and len(times)>=150 and len(adj)==len(close),"VENDOR_HISTORY_INCOMPLETE"
  dayrows=[]; seen=set()
  for t,c,a in zip(times,close,adj):
