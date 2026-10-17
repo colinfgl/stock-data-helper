@@ -68,8 +68,9 @@ def retrieve(url,outdir,name):
  (outdir/name).write_bytes(raw)
  return {"url":url,"final_url":final,"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),"content_type":ctype},raw
 def main():
- parser=argparse.ArgumentParser();parser.add_argument("--out",required=True);parser.add_argument("--self-test",action="store_true");a=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument("--out");parser.add_argument("--self-test",action="store_true");a=parser.parse_args()
  if a.self_test:print(json.dumps(qa()));return
+ if not a.out:parser.error("--out is required unless --self-test")
  outdir=pathlib.Path(a.out);outdir.mkdir(parents=True,exist_ok=False)
  result={"research_only":True,"official_price_basis_formal_approved":False,
     "original_prediction_point_modified":False,"event":EVENT,"qa":qa(),"daily":[],"announcements":[]}
