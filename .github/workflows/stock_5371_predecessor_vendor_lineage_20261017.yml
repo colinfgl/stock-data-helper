@@ -1,0 +1,33 @@
+name: stock-5371-vendor-predecessor-history-research-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - 'scripts/stock_5371_predecessor_yahoo_original_20261017.py'
+      - '.github/workflows/stock_5371_predecessor_vendor_lineage_20261017.yml'
+permissions:
+  contents: read
+jobs:
+  bounded-vendor-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and verify date/identity guards
+        run: |
+          python -m py_compile scripts/stock_5371_predecessor_yahoo_original_20261017.py
+          python scripts/stock_5371_predecessor_yahoo_original_20261017.py --self-test
+      - name: Research-only original predecessor history, save failures
+        run: |
+          python scripts/stock_5371_predecessor_yahoo_original_20261017.py --out vendor_5371_original_20261017
+      - name: Preserve raw original and fail-closed receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5371-predecessor-vendor-20261017-${{ github.run_id }}
+          path: vendor_5371_original_20261017/
+          if-no-files-found: warn
+          retention-days: 30
