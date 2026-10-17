@@ -1,0 +1,30 @@
+name: stock-5371-TPEX-native-POST-monthly-contract-probe-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - 'scripts/tpex_5371_month_post_contract_probe_20261017.py'
+      - '.github/workflows/tpex_5371_month_post_contract_probe_20261017.yml'
+permissions:
+  contents: read
+jobs:
+  tp-exact-month:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile research-only source retrieval
+        run: python -m py_compile scripts/tpex_5371_month_post_contract_probe_20261017.py
+      - name: Native POST schema probe one historical month
+        run: python scripts/tpex_5371_month_post_contract_probe_20261017.py --out official_tpex_5371_POST_month_20261017
+      - name: Archive primary response evidence, including HOLD
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5371-TPEx-POST-month-${{ github.run_id }}
+          path: official_tpex_5371_POST_month_20261017/
+          if-no-files-found: warn
+          retention-days: 30
