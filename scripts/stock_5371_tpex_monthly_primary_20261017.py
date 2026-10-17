@@ -1,83 +1,104 @@
 #!/usr/bin/env python3
-"""TPEx primary month-by-month raw OHLC 5371 history; research-only, no formal/PIT splice."""
+"""Recover 25 historic months of actual TPEx tradingStock data for delisted 5371.
+
+Replays exactly the officially published web frontend's POST API, with date as
+YYYY/MM/01; preserves original response per month and SHA256, fail-closed.
+DOES NOT create approved adjusted-close nor replace 3718 prediction.
+"""
 import argparse,datetime as dt,hashlib,json,math,pathlib,time,urllib.parse,urllib.request
-CODE='5371';LAST='2026-08-21';LAST_CLOSE=83.5
-BASE='https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php'
-def dates():
+CODE="5371";FINAL_DATE="2026-08-21";FINAL_CLOSE=83.50
+URL="https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"
+KEYS=["日 期","成交張數","成交仟元","開盤","最高","最低","收盤","漲跌","筆數"]
+def periods():
  y,m=2024,8
  while (y,m)<=(2026,8):
   yield y,m
   m+=1
   if m>12:y,m=y+1,1
 def parse(raw,year,month):
- o=json.loads(raw.decode('utf-8-sig'))
- assert isinstance(o,dict),'SOURCE_NOT_OBJECT'
- assert str(o.get('stat','OK')).upper() in ('OK','','SUCCESS'),'SOURCE_STATUS_NOT_OK'
- aa=o.get('aaData')
- assert isinstance(aa,list),'MONTHLY_AADATA_MISSING'
- if not aa:return []
- out=[];seen=set()
- for row in aa:
-  assert isinstance(row,list) and len(row)>=7,'ROW_FORMAT_INVALID'
-  yy,mm,dd=map(int,str(row[0]).strip().replace('-','/').split('/'))
-  date=dt.date(yy+1911 if yy<1911 else yy,mm,dd)
-  assert (date.year,date.month)==(year,month),'DATE_MONTH_MISMATCH'
-  day=date.isoformat()
-  assert day not in seen,'DUPLICATE_DATE';seen.add(day)
-  try: vals=[float(str(row[i]).strip().replace(',','')) for i in (3,4,5,6)]
-  except (TypeError,ValueError) as exc:raise ValueError('NON_NUMERIC_OHLC') from exc
-  op,hi,lo,cl=vals
-  assert all(math.isfinite(x) and x>0 for x in vals),'BAD_NONPOSITIVE_OHLC'
-  assert lo<=min(op,cl)<=max(op,cl)<=hi,'PRICE_INVARIANT'
-  out.append({'day':day,'open':op,'high':hi,'low':lo,'close':cl})
- assert out==sorted(out,key=lambda x:x['day']),'DATE_ORDER_INVALID'
- return out
+ obj=json.loads(raw.decode("utf-8-sig"))
+ assert obj.get("stat")=="ok","OFFICIAL_STAT_NOT_OK"
+ assert str(obj.get("code"))==CODE,"OFFICIAL_SYMBOL_MISMATCH"
+ assert str(obj.get("date"))==f"{year:04d}{month:02d}01","OFFICIAL_MONTH_MISMATCH"
+ tables=obj.get("tables")
+ assert isinstance(tables,list) and len(tables)==1,"OFFICIAL_TABLE_NOT_UNIQUE"
+ t=tables[0]; fields=[str(f).strip() for f in t.get("fields",[])]
+ assert fields==KEYS,"OFFICIAL_SCHEMA_DRIFT:"+repr(fields)
+ dat=t.get("data")
+ assert isinstance(dat,list) and len(dat)>0,"OFFICIAL_EMPTY_MONTH"
+ all=[];seen=set()
+ for r in dat:
+  assert isinstance(r,list) and len(r)==len(KEYS),"SOURCE_ROW_WIDTH_DRIFT"
+  yy,mm,dd=map(int,str(r[0]).replace("-","/").split("/"))
+  day=dt.date(yy+1911 if yy<1911 else yy,mm,dd)
+  assert (day.year,day.month)==(year,month),"TRADING_DATE_NOT_TARGET_MONTH"
+  day=str(day);assert day not in seen,"DUPLICATE_SOURCE_DATE";seen.add(day)
+  def n(idx):
+   v=float(str(r[idx]).strip().replace(",",""))
+   if not math.isfinite(v) or v<=0:raise ValueError("ZERO_OR_NONFINITE_PRICE")
+   return v
+  o,hi,lo,c=[n(i) for i in (3,4,5,6)]
+  assert lo<=min(o,c)<=max(o,c)<=hi,"OHLC_INVARIANT"
+  all.append({"date":day,"symbol":CODE,"open":o,"high":hi,"low":lo,"close":c})
+ assert all==sorted(all,key=lambda x:x["date"]),"SOURCE_DATE_ORDER"
+ return all
 def selftest():
- dat={'stat':'OK','aaData':[['115/08/21','10','100','84.5','85','83.4','83.5','-0.8','7']]}
- assert len(parse(json.dumps(dat).encode(),2026,8))==1
- fails=0
- for idx,value in [(0,'115/07/21'),(4,'82.9'),(6,'0')]:
-  q=json.loads(json.dumps(dat));q['aaData'][0][idx]=value
-  try:parse(json.dumps(q).encode(),2026,8)
-  except (AssertionError,ValueError):fails+=1
- assert fails==3
- return {'qa':'PASS_DATE_AND_PRICE_FAIL_CLOSED','tests':4,'passed':4}
-def retrieve(out,year,month):
- roc=f'{year-1911}/{month:02d}'
- url=BASE+'?'+urllib.parse.urlencode({'l':'zh-tw','d':roc,'stkno':CODE})
- e={'month':f'{year}-{month:02d}','url':url,'status':'HOLD'}
+ obj={"stat":"ok","code":"5371","date":"20260801","tables":[{"fields":KEYS,"data":[["115/08/21","2,135","179,293","84.50","85.00","83.40","83.50","-0.80","3,726"]]}]}
+ b=json.dumps(obj).encode()
+ a=parse(b,2026,8);assert len(a)==1 and a[0]["close"]==83.50
+ n=0
+ for k,v in [("code","3718"),("date","20260901")]:
+  p=json.loads(json.dumps(obj));p[k]=v
+  try:parse(json.dumps(p).encode(),2026,8)
+  except (AssertionError,ValueError):n+=1
+ p=json.loads(json.dumps(obj));p["tables"][0]["data"][0][5]="85.50"
+ try:parse(json.dumps(p).encode(),2026,8)
+ except (AssertionError,ValueError):n+=1
+ assert n==3
+ return {"tests":4,"passed":4,"status":"PASS_REPLAY_GUARDS"}
+def fetch_one(year,month,folder):
+ date=f"{year:04d}/{month:02d}/01"
+ query=urllib.parse.urlencode({"code":CODE,"date":date,"response":"json"}).encode()
+ req=urllib.request.Request(URL,data=query,method="POST",headers={
+  "Content-Type":"application/x-www-form-urlencoded","Accept":"application/json",
+  "User-Agent":"Mozilla/5.0","Origin":"https://www.tpex.org.tw",
+  "Referer":"https://www.tpex.org.tw/zh-tw/mainboard/trading/info/stock-pricing.html"})
+ receipt={"month":f"{year:04d}-{month:02d}","status":"HOLD","requested":date}
  try:
-  req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'Mozilla/5.0 historical-firstparty-research'})
-  with urllib.request.urlopen(req,timeout=12) as resp:
-   raw=resp.read(4000001);status=resp.status;final=resp.geturl()
-  assert status==200 and 30<len(raw)<4000001,'UNTRUSTED_HTTP_OR_BYTES'
-  assert urllib.parse.urlsplit(final).hostname=='www.tpex.org.tw','UNTRUSTED_REDIRECT'
-  rows=parse(raw,year,month)
-  fname=f'official_5371_{year}{month:02d}.json'
-  (out/fname).write_bytes(raw)
-  e.update(status='PASS_TPEX_PRIMARY_MONTH' if rows else 'HOLD_OFFICIAL_NO_TRADE_ROWS',original_file=fname,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),row_count=len(rows))
-  return e,rows
+  with urllib.request.urlopen(req,timeout=15) as r:
+   blob=r.read(3000001);status=r.status;url=r.geturl()
+  assert status==200 and 20<len(blob)<3000001 and urllib.parse.urlsplit(url).hostname=="www.tpex.org.tw","OFFICIAL_HTTP_SOURCE_HOLD"
+  data=parse(blob,year,month)
+  filename=f"tpex_original_5371_{year:04d}{month:02d}.json"
+  (folder/filename).write_bytes(blob)
+  receipt.update(status="PASS_PRIMARY_EXACT_MONTH",raw_sha256=hashlib.sha256(blob).hexdigest(),bytes=len(blob),file=filename,original_url=URL,row_count=len(data),first=data[0]["date"],last=data[-1]["date"])
+  return receipt,data
  except Exception as exc:
-  e.update(status='HOLD_OFFICIAL_RETRIEVAL',error_class=type(exc).__name__,error=str(exc)[:190])
-  return e,[]
+  receipt.update(status="HOLD_PRIMARY_OR_SCHEMA_ERROR",error_type=type(exc).__name__,error=str(exc)[:220])
+  return receipt,[]
 def main():
- p=argparse.ArgumentParser();p.add_argument('--out');p.add_argument('--self-test',action='store_true');args=p.parse_args()
- if args.self_test:print(json.dumps(selftest()));return
- if not args.out:p.error('--out required unless --self-test')
- out=pathlib.Path(args.out);out.mkdir(parents=True,exist_ok=False)
- receipts=[];rows=[]
- for y,m in dates():
-  e,r=retrieve(out,y,m);receipts.append(e);rows+=r
-  print(json.dumps({'period':e['month'],'status':e['status'],'count':len(r)}),flush=True)
-  time.sleep(.25)
- rows.sort(key=lambda x:x['day'])
- duplicate=len(rows)!=len(set(x['day'] for x in rows))
- extra=[x for x in rows if x['day']>LAST]
- last=rows[-1] if rows else None
- direct=not duplicate and not extra and bool(last) and last['day']==LAST and abs(last['close']-LAST_CLOSE)<.06
- ok=sum(e['status']=='PASS_TPEX_PRIMARY_MONTH' for e in receipts)
- result={'symbol':CODE,'successor':'3718','shareConversion1to1':True,'requested_months':len(receipts),'valid_months':ok,'missing_months':[e['month'] for e in receipts if e['status']!='PASS_TPEX_PRIMARY_MONTH'],'raw_dates_total':len(rows),'duplicate_date':duplicate,'post_last_trade_dates':len(extra),'last':last,'official_last_close_match':bool(direct),'status':'PASS_COMPLETE_5371_TPEX_OHLC_RESEARCH' if ok==len(receipts) and len(rows)>=350 and direct else 'HOLD_COMPLETE_ADJUSTED_LINEAGE','source_url_template':BASE,'scope':'RESEARCH_TPEX_RAW_OHLC_ONLY','formal_eligible':False,'issuer_exhaustive':False,'approved_adjusted_series':False,'natural_credit':0,'oos_credit':0,'qa':selftest(),'receipts':receipts}
- (out/'receipt.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
- (out/'raw_5371_price_history_RESEARCH_ONLY.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
- print(json.dumps({k:v for k,v in result.items() if k!='receipts'},ensure_ascii=False))
-if __name__=='__main__':main()
+ a=argparse.ArgumentParser();a.add_argument("--out");a.add_argument("--self-test",action="store_true");a=a.parse_args()
+ if a.self_test:print(json.dumps(selftest()));return
+ if not a.out:raise SystemExit("--out required unless --self-test")
+ out=pathlib.Path(a.out);out.mkdir(parents=True,exist_ok=False)
+ entries=[];all=[]
+ for y,m in periods():
+  receipt,rows=fetch_one(y,m,out);entries.append(receipt);all+=rows
+  print("MONTH",json.dumps({"month":receipt["month"],"status":receipt["status"],"count":len(rows),"reason":receipt.get("error")},ensure_ascii=False),flush=True)
+  time.sleep(.16)
+ all.sort(key=lambda r:r["date"]);unique=len({z["date"] for z in all})==len(all)
+ last=all[-1] if all else None
+ lastpass=bool(last) and last["date"]==FINAL_DATE and abs(last["close"]-FINAL_CLOSE)<0.06
+ missing=[z["month"] for z in entries if z["status"]!="PASS_PRIMARY_EXACT_MONTH"]
+ status="PASS_COMPLETE_5371_TPEX_RAW_HISTORY_RESEARCH_ONLY" if len(entries)==25 and not missing and len(all)>=350 and unique and lastpass else "HOLD_COMPLETENESS_OR_RAW_HISTORY"
+ report={"status":status,"symbol":CODE,"successor":"3718","source_method":"NATIVE_POST_www_zh-tw_afterTrading_tradingStock_Gregorian_YYYYMM01",
+  "source_form":"https://www.tpex.org.tw/zh-tw/mainboard/trading/info/stock-pricing.html","num_months":len(entries),
+  "verified_months":len(entries)-len(missing),"missing_months":missing,
+  "raw_ohlc_rows":len(all),"unique_dates":unique,"final_date_close_matches_tpex_daily_official":bool(lastpass),"first":all[0] if all else None,"last":last,
+  "original_issued_share_ratio":1.0,"price_overnight_jump_is_NOT_company_action_adjustment_factor":True,
+  "research_only":True,"formal_eligible":False,"adjusted_close_NOT_approved":True,"natural_OOS_credit":0,
+  "qa":selftest(),"period_receipts":entries}
+ (out/"official_5371_daily_ohlc_RESEARCH_ONLY.json").write_text(json.dumps(all,ensure_ascii=False,indent=2)+"\n")
+ (out/"receipt.json").write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
+ print("FINAL",json.dumps({k:v for k,v in report.items() if k!="period_receipts"},ensure_ascii=False))
+if __name__=="__main__":main()
