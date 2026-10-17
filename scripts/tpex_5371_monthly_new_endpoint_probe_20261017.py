@@ -43,7 +43,7 @@ def main():
    except ValueError:
     entry["status"]="HOLD_HTML_NOT_JSON"
     if i==0:
-     scripts=re.findall(r'<script[^>]+src=["\\']([^"\\']+)',content,re.I)
+     scripts=re.findall(r"<script[^>]+src=['\"]([^'\"]+)",content,re.I)
      entry["scripts"]=scripts[-20:]
      for kw in ("stock-pricing","afterTrading","api","query","stkno","ajax","download"):
       inds=[m.start() for m in re.finditer(re.escape(kw),content,re.I)]
