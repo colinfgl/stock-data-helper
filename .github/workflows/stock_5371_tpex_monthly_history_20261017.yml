@@ -1,0 +1,32 @@
+name: stock-5371-TPEx-primary-25monthly-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - 'scripts/stock_5371_tpex_monthly_primary_20261017.py'
+      - '.github/workflows/stock_5371_tpex_monthly_history_20261017.yml'
+permissions:
+  contents: read
+jobs:
+  historical-stock-raw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and 4 deterministic guard tests
+        run: |
+          python -m py_compile scripts/stock_5371_tpex_monthly_primary_20261017.py
+          python scripts/stock_5371_tpex_monthly_primary_20261017.py --self-test
+      - name: Fetch one per-month TPEx original for the historical 5371 predecessor
+        run: python scripts/stock_5371_tpex_monthly_primary_20261017.py --out official_5371_25_month_history
+      - name: Archive every official original plus structured fail-closed receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5371-TPEx-25months-${{ github.run_id }}
+          path: official_5371_25_month_history/
+          if-no-files-found: warn
+          retention-days: 30
