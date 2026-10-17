@@ -23,7 +23,7 @@ def parse(raw,year,month):
  tables=obj.get("tables")
  assert isinstance(tables,list) and len(tables)==1,"OFFICIAL_TABLE_NOT_UNIQUE"
  t=tables[0]; fields=[str(f).strip() for f in t.get("fields",[])]
- assert fields==KEYS,"OFFICIAL_SCHEMA_DRIFT:"+repr(fields)
+ assert fields==KEYS or fields==[("成交仟股" if x=="成交張數" else x) for x in KEYS],"OFFICIAL_SCHEMA_DRIFT:"+repr(fields)
  dat=t.get("data")
  assert isinstance(dat,list) and len(dat)>0,"OFFICIAL_EMPTY_MONTH"
  all=[];seen=set()
@@ -46,6 +46,8 @@ def selftest():
  obj={"stat":"ok","code":"5371","date":"20260801","tables":[{"fields":KEYS,"data":[["115/08/21","2,135","179,293","84.50","85.00","83.40","83.50","-0.80","3,726"]]}]}
  b=json.dumps(obj).encode()
  a=parse(b,2026,8);assert len(a)==1 and a[0]["close"]==83.50
+ q=json.loads(json.dumps(obj));q["tables"][0]["fields"][1]="成交仟股"
+ assert parse(json.dumps(q).encode(),2026,8)[0]["close"]==83.50
  n=0
  for k,v in [("code","3718"),("date","20260901")]:
   p=json.loads(json.dumps(obj));p[k]=v
@@ -55,7 +57,7 @@ def selftest():
  try:parse(json.dumps(p).encode(),2026,8)
  except (AssertionError,ValueError):n+=1
  assert n==3
- return {"tests":4,"passed":4,"status":"PASS_REPLAY_GUARDS"}
+ return {"tests":5,"passed":5,"status":"PASS_REPLAY_GUARDS_2_OFFICIAL_VOLUME_FIELD_VARIANTS"}
 def fetch_one(year,month,folder):
  date=f"{year:04d}/{month:02d}/01"
  query=urllib.parse.urlencode({"code":CODE,"date":date,"response":"json"}).encode()
