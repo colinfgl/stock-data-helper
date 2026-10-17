@@ -311,11 +311,42 @@ jobs:
           for f in sorted(root.glob("chart_*.json")):
               symbol=f.name[len("chart_"):-len(".json")]
               try:
-                  q=reconcile(f.read_bytes(),symbol)
-                  records.append({"Symbol":symbol,"Status":q["Status"],"RawSHA256":q["RawSHA256"],
-                                  "DividendLabels":q["DividendLabels"],"Matched":q["Matched"],
-                                  "ThresholdExcluded":q["ExcludedByCountingThreshold"],
-                                  "Holds":q["Holds"],"Events":q["Events"]})
+                  raw=f.read_bytes()
+                  q=reconcile(raw,symbol)
+                  item={"Symbol":symbol,"Status":q["Status"],"RawSHA256":q["RawSHA256"],
+                        "DividendLabels":q["DividendLabels"],"Matched":q["Matched"],
+                        "ThresholdExcluded":q["ExcludedByCountingThreshold"],
+                        "Holds":q["Holds"],"Events":q["Events"],
+                        "IssuerCrossSourceStatus":"NOT_CHECKED_NO_INDEPENDENT_ISSUER_EVENT_EVIDENCE",
+                        "IssuerComparisonCount":0,"IssuerConflictCount":0}
+                  if symbol=="3017.TW":
+                      manifest_path=pathlib.Path("research/stock_3017_20250819_issuer_vendor_manifest_20261017.json")
+                      try:
+                          from stock_vendor_issuer_dividend_gate_20261017 import run as compare_vendor_issuer
+                          manifest=json.loads(manifest_path.read_text(encoding="utf-8"))
+                          frozen_baseline_sha=manifest["VendorOriginalRawSHA256"]
+                          # Each genuine NEW source capture has a NEW content hash. Freeze it
+                          # with this run; preserve, never overwrite, the historical baseline pin.
+                          manifest["VendorOriginalRawSHA256"]=q["RawSHA256"]
+                          compare=compare_vendor_issuer(raw,symbol,manifest)
+                          compare["ArchivedBaselineRawSHA256"]=frozen_baseline_sha
+                          compare["CurrentRunSourceRawSHA256"]=q["RawSHA256"]
+                          compare["OriginalIssuerEvidenceRole"]="ISSUER_MOPS_REPRINT_SECONDARY"
+                          issuer_out=out/"issuer_vendor_cross_source"
+                          issuer_out.mkdir(parents=True,exist_ok=True)
+                          (issuer_out/"3017_20250819_evidence_input.json").write_text(
+                              json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf8")
+                          (issuer_out/"3017_20250819_research_gate.json").write_text(
+                              json.dumps(compare,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf8")
+                          item.update(IssuerCrossSourceStatus=compare["Status"],
+                                      IssuerComparisonCount=compare["IssuerEventCount"],
+                                      IssuerConflictCount=compare["ConflictCount"],
+                                      IssuerResearchReceipt="issuer_vendor_cross_source/3017_20250819_research_gate.json")
+                      except (ValueError,KeyError,TypeError,OSError,AssertionError) as exc:
+                          # Preserve vendor data, but NEVER silently claim external issuer PASS.
+                          item.update(IssuerCrossSourceStatus="HOLD_INDEPENDENT_ISSUER_GATE_FAILURE",
+                                      IssuerResearchReason=str(exc)[:160])
+                  records.append(item)
               except Exception as exc:
                   records.append({"Symbol":symbol,"Status":"HOLD_SOURCE_OR_SCHEMA","Error":str(exc)[:180]})
           status="RESEARCH_SIDE_CAR_68_SYMBOL_SCAN" if len(records)==68 else "RESEARCH_SIDE_CAR_PARTIAL_SOURCE"
@@ -323,9 +354,12 @@ jobs:
                   "VerifiedCharts":sum(x["Status"]=="RESEARCH_MATCHED" for x in records),
                   "ChartsWithHold":sum(x["Status"].startswith("HOLD") or x["Status"]=="RESEARCH_PARTIAL_HOLD" for x in records),
                   "ThresholdExcludedEvents":sum(x.get("ThresholdExcluded",0) for x in records),
+                  "IssuerAmountCrossSourceCovered":sum(x.get("IssuerComparisonCount",0) for x in records),
+                  "IssuerAmountConflicts":sum(x.get("IssuerConflictCount",0) for x in records),
+                  "IssuerValidation":"RESEARCH_ONLY_NOT_ISSUER_EXHAUSTIVE",
                   "ReportGeneratedAtUTC":datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   "Records":records,"FormalEligible":False,"NaturalCredit":0,"OOSCredit":0,
-                  "Note":"Nonblocking research-only exact source chart cohort. Can be used for discrepancy triage, never for issuer-exhaustive or future premarket prediction seal."}
+                  "Note":"VerifiedCharts is Yahoo INTERNAL factor consistency only; independent issuer amount crosscheck, when its manifest is present, can still HOLD. The issuer evidence is a secondary MOPS reprint, not firstparty. Never claim PIT, issuer exhaustive, Formal, natural/OOS, cash or chat delivery."}
           target=out/"dividend_factor_research_sidecar.json"
           target.write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf8")
           print("SIDE_CAR:",report["Status"],"charts",len(records),
