@@ -1,0 +1,76 @@
+name: stock-daily-source-issuer-crossgate-integration-qa-20261017
+on:
+  push:
+    branches: [stock-daily-issuer-dividend-crossgate-20261017]
+    paths:
+      - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+      - '.github/workflows/stock_daily_issuer_crossgate_qa_20261017.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  run-68-original-sidecar-3017-issuer-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Re-run vendor/issuer factor source unit QA
+        run: |
+          python -m py_compile scripts/stock_vendor_issuer_dividend_gate_20261017.py
+          python scripts/stock_vendor_issuer_dividend_gate_20261017.py --self-test
+          python scripts/stock_dividend_factor_reconciliation_v1_20261013.py --self-test
+      - name: Download authentic 68 Yahoo chart originals already archived on Oct16
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-38936085384
+          run-id: 38936085384
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: fixture
+      - name: Execute only original daily nonblocking dividend research sidecar code
+        run: |
+          python - <<'PY'
+          import pathlib,textwrap,py_compile
+          w=pathlib.Path('.github/workflows/stock_daily_nextsession_source_closure_20261013.yml').read_text()
+          marker='      - name: Optional source-chart dividend-factor audit, nonblocking\n'
+          body=w.split(marker,1)[1].split('      - name: Save 68-code verified partial market evidence independently\n',1)[0]
+          start="          PYTHONPATH=scripts python - <<'PY'\n"
+          assert body.count(start)==1
+          script=body.split(start,1)[1].split('\n          PY\n',1)[0]
+          code=textwrap.dedent(script)+'\n'
+          dest=pathlib.Path('qa_original_dividend_sidecar.py');dest.write_text(code)
+          py_compile.compile(str(dest),doraise=True)
+          print('PASS real nonblocking source script parse/compile: ',len(code),'bytes')
+          PY
+          mkdir -p stock_next_session_original_source_raw
+          cp fixture/stock_next_session_original_source_raw/chart_*.json stock_next_session_original_source_raw/
+          PYTHONPATH=scripts python qa_original_dividend_sidecar.py
+          python - <<'PY'
+          import json,pathlib
+          r=json.loads(pathlib.Path('stock_next_session_original_source/dividend_factor_research_sidecar.json').read_text())
+          assert r['SourceChartFilesScanned']==68 and len(r['Records'])==68
+          assert r['FormalEligible']==False and r['NaturalCredit']==0 and r['OOSCredit']==0
+          assert r['IssuerAmountCrossSourceCovered']==1 and r['IssuerAmountConflicts']==1
+          z=next(v for v in r['Records'] if v['Symbol']=='3017.TW')
+          assert z['Status']=='RESEARCH_MATCHED'
+          assert z['RawSHA256']=='56acccafdb7dcadec1c9627155efe151b7efee37f544d7683f90570e17dc2d3d'
+          assert z['IssuerCrossSourceStatus']=='RESEARCH_VENDOR_ISSUER_AMOUNT_HOLD' and z['IssuerConflictCount']==1
+          q=json.loads(pathlib.Path('stock_next_session_original_source/issuer_vendor_cross_source/3017_20250819_research_gate.json').read_text())
+          assert q['Rows'][0]['VendorChartAmount']==9.934345
+          assert abs(q['Rows'][0]['DifferenceVendorMinusIssuer']-.00397502)<1e-9
+          assert q['Rows'][0]['Status']=='HOLD_VENDOR_ISSUER_AMOUNT_CONFLICT'
+          assert not q['FormalEligible'] and not q['IssuerExhaustive']
+          print('PASS REAL 68-chart sidecar: 3017 independent issuer conflict HOLD, no formal promotion')
+          PY
+      - name: Save 68-original source audit receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3017-daily-sidecar-issuer-crossgate-qa-${{ github.run_id }}
+          path: |
+            stock_next_session_original_source/dividend_factor_research_sidecar.json
+            stock_next_session_original_source/issuer_vendor_cross_source/
+          if-no-files-found: warn
+          retention-days: 30
