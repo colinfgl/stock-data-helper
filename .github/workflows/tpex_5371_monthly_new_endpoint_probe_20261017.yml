@@ -1,0 +1,30 @@
+name: stock-5371-TPEx-monthly-endpoint-probe-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - 'scripts/tpex_5371_monthly_new_endpoint_probe_20261017.py'
+      - '.github/workflows/tpex_5371_monthly_new_endpoint_probe_20261017.yml'
+permissions:
+  contents: read
+jobs:
+  probe-official:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate Python syntax
+        run: python -m py_compile scripts/tpex_5371_monthly_new_endpoint_probe_20261017.py
+      - name: Probe exact official monthly target, 10 bounded requests
+        run: python scripts/tpex_5371_monthly_new_endpoint_probe_20261017.py --out tpex_5371_monthly_probe_20261017
+      - name: Preserve source content and receipts even if unavailable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TPEx-5371-monthly-endpoint-probe-${{ github.run_id }}
+          path: tpex_5371_monthly_probe_20261017/
+          if-no-files-found: warn
+          retention-days: 30
