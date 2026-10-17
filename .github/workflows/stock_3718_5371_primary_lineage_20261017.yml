@@ -1,0 +1,37 @@
+name: stock-3718-5371-primary-lineage-readonly-20261017
+on:
+  push:
+    branches: [stock-3718-5371-primary-lineage-20261017]
+    paths:
+      - 'scripts/stock_3718_5371_primary_lineage_20261017.py'
+      - '.github/workflows/stock_3718_5371_primary_lineage_20261017.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retrieve-exact-firstparty:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run four fail-closed parser tests
+        run: |
+          python -m py_compile scripts/stock_3718_5371_primary_lineage_20261017.py
+          python scripts/stock_3718_5371_primary_lineage_20261017.py --self-test
+      - name: Query TPEx only, save original bytes and exact-symbol/date receipts
+        run: |
+          python scripts/stock_3718_5371_primary_lineage_20261017.py --out original_tpex_3718_5371
+      - name: Save evidence even if official source fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3718-5371-TPEx-primary-${{ github.run_id }}
+          path: original_tpex_3718_5371/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Nonpromotion guarantee
+        if: always()
+        run: echo 'Research-only TPEx original recovery. No formal model, canonical Prediction, adjusted-close, Natural or OOS updates.' >> "$GITHUB_STEP_SUMMARY"
