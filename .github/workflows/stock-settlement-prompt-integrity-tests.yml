@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/stock_settlement_prompt_preflight_20261018.py'
+      - 'scripts/stock_settlement_prepare_deployment_20261018.py'
       - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
       - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
   pull_request:
@@ -22,6 +23,25 @@ jobs:
         with:
           python-version: '3.11'
       - name: Syntax
-        run: python -m compileall -q scripts/stock_settlement_prompt_preflight_20261018.py tests/test_stock_settlement_prompt_preflight_20261018.py
+        run: python -m compileall -q scripts/stock_settlement_prompt_preflight_20261018.py scripts/stock_settlement_prepare_deployment_20261018.py tests/test_stock_settlement_prompt_preflight_20261018.py
+      - name: Deployment entrypoint must fail closed without archived v11
+        run: |
+          python - <<'PY'
+          import importlib.util, pathlib
+          p = pathlib.Path("scripts/stock_settlement_prepare_deployment_20261018.py")
+          spec = importlib.util.spec_from_file_location("deployer", p)
+          import sys
+          sys.path.insert(0, str(p.parent))
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          incomplete = dict(id="6a825a73808c81918c5c7b5d1fecaf28",
+                            prompt="---BOOTSTRAP_BODY---\\nnot a verified v11",
+                            schedule="weekdays 19:00", is_enabled=True,
+                            timing_mode="exact_schedule",
+                            notifications_enabled=True, email_enabled=True)
+          result = module.prepare(incomplete, incomplete, incomplete)
+          assert result["status"] == "BLOCK", result
+          print("SAFE_BLOCK_PASSED", result["reasons"])
+          PY
       - name: Eight fail-closed regression scenarios
         run: python -m unittest discover -s tests -p 'test_stock_settlement_prompt_preflight_20261018.py' -v
