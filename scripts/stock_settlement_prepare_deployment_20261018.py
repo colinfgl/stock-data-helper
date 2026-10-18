@@ -50,6 +50,58 @@ def prepare(archive, live, candidate):
                 hashlib.sha256(live["prompt"].encode("utf-8")).hexdigest(),
             "natural_credit": 0, "deployment_executed": False}
 
+def prepare_successor(live, candidate, evidence):
+    """Stage a NEW governed generation, not a historical v11 restoration.
+
+    Requires authenticated evidence from a separate change-governance process.
+    Never calls the automation update API.
+    """
+    from stock_settlement_prompt_preflight_20261018 import sha_body, split_prompt, envelope_values
+    issues = []
+    if not isinstance(live, dict) or not isinstance(candidate, dict) or not isinstance(evidence, dict):
+        return {"status": "BLOCK", "reasons": ["INVALID_INPUT"]}
+    for role, item in (("LIVE", live), ("CANDIDATE", candidate)):
+        if item.get("id") != TASK:
+            issues.append(role + "_TASK_ID_MISMATCH")
+        if not isinstance(item.get("prompt"), str):
+            issues.append(role + "_PROMPT_MISSING")
+    for key in SETTINGS:
+        if key not in live or key not in candidate:
+            issues.append("MISSING_SETTING_" + key)
+        elif live[key] != candidate[key]:
+            issues.append("SETTINGS_DRIFT_" + key)
+    # These fields are receipts from distinct authorities, not assertions from
+    # the candidate document itself. Default DENY when any receipt is absent.
+    for key in ("governance_approval_receipt", "fresh_two_task_rollback_receipt",
+                "native_terminal_readback_receipt", "successor_bundle_readback_receipt",
+                "live_task_snapshot_sha256"):
+        if not isinstance(evidence.get(key), str) or not evidence[key].strip():
+            issues.append("MISSING_EVIDENCE_" + key)
+    if issues:
+        return {"status": "BLOCK_NEW_SUCCESSOR", "reasons": issues}
+    live_sha = hashlib.sha256(live["prompt"].encode("utf-8")).hexdigest()
+    if evidence["live_task_snapshot_sha256"] != live_sha:
+        issues.append("STALE_LIVE_SNAPSHOT_SHA")
+    try:
+        live_body_sha = sha_body(live["prompt"])
+        next_body_sha = sha_body(candidate["prompt"])
+        if live_body_sha != next_body_sha:
+            issues.append("IMMUTABLE_BOOTSTRAP_BODY_CHANGED")
+        env, _ = split_prompt(candidate["prompt"])
+        fields = envelope_values(env, issues, "SUCCESSOR_")
+        if fields.get("BootstrapBodySHA256") != next_body_sha:
+            issues.append("BOOTSTRAP_DECLARATION_MISMATCH")
+        if fields.get("RuntimeSupplementVersion", "").startswith("STOCK-SETTLEMENT-RECOVERY-"):
+            issues.append("SUCCESSOR_GENERATION_NOT_DECLARED")
+    except ValueError as exc:
+        issues.append(str(exc))
+    if issues:
+        return {"status": "BLOCK_NEW_SUCCESSOR", "reasons": issues}
+    return {"status": "READY_FOR_SEPARATE_AUTHORIZED_CUTOVER",
+            "deployment_executed": False, "natural_credit": 0,
+            "task_id": TASK, "live_prompt_sha256": live_sha,
+            "candidate_prompt_sha256": hashlib.sha256(candidate["prompt"].encode("utf-8")).hexdigest()}
+
 def main(argv):
     if len(argv) != 4:
         print("Usage: ... archived_v11.json live.json candidate.json", file=sys.stderr)
