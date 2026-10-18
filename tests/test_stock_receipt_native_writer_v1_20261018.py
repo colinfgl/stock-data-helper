@@ -34,4 +34,20 @@ class WriterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_native_receipts(plan=plan,actions=actions,client=db,spreadsheet_id='S',lease_token='T',lease_verified=True)
 
+    def test_overflow_record_blocks_write(self):
+        db=Fake()
+        a=['']*20; b=['']*22
+        a[0:4]=['RUN-OVERFLOW','2026-10-19','STOCK_SETTLEMENT','a'*64]
+        b[0:3]=['2026-10-19','STOCK_SETTLEMENT','TASK-1']
+        b[13]='a'*64
+        # A malformed existing row is never invisible to duplicate checking.
+        db.data['STOCK_Delivery_Receipt'].append(a+['unexpected_extra_cell'])
+        plan={'RunID':'RUN-OVERFLOW','TargetDate':'2026-10-19','ReportSHA':'a'*64,
+              'Authority':'CURRENT_RUN_BYTES_ONLY_NO_AUTOMATIC_FORMAL_NATURAL',
+              'NativeWriteStatus':'NOT_EXECUTED','ReceiptRow':a,'ObservabilityRow':b}
+        actions={'AutoWriteAllowed':True,'ReceiptAction':'APPEND_REQUIRED','ObservabilityAction':'APPEND_REQUIRED'}
+        with self.assertRaisesRegex(ValueError,'ROW_WIDTH_OVERFLOW'):
+            write_native_receipts(plan=plan,actions=actions,client=db,spreadsheet_id='S',lease_token='T',lease_verified=True)
+        self.assertEqual(len(db.data['STOCK_Delivery_Observability']),1)
+
 if __name__=='__main__':unittest.main()
