@@ -14,8 +14,8 @@ def _inspect(client, spreadsheet_id, sheet, fields, row, key_columns):
     rows = client.read_rows(spreadsheet_id, sheet)
     if not rows or tuple(rows[0]) != fields:
         raise ValueError(sheet + '_HEADER_DRIFT')
-    matches = [r for r in rows[1:] if len(r) == len(fields)
-               and all(r[i] == row[i] for i in key_columns)]
+    matches = [list(r) + [''] * (len(fields) - len(r)) for r in rows[1:] if len(r) <= len(fields)
+               and all((r[i] if i < len(r) else '') == row[i] for i in key_columns)]
     if len(matches) > 1:
         raise ValueError(sheet + '_DUPLICATE_KEY')
     if matches and list(matches[0]) != list(row):
