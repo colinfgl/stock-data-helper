@@ -63,7 +63,8 @@ class SuccessorGateTests(unittest.TestCase):
         x = snap("STOCK-SETTLEMENT-RECOVERY-20261018")
         y = snap("STOCK-SETTLEMENT-SUCCESSOR-20261018")
         result = prepare_successor(x, y, evidence(x))
-        self.assertEqual(result["status"], "READY_FOR_SEPARATE_AUTHORIZED_CUTOVER")
+        self.assertEqual(result["status"], "BLOCK_NEW_SUCCESSOR")
+        self.assertIn("EXTERNAL_AUTHORITY_RECEIPTS_NOT_CRYPTOGRAPHICALLY_VERIFIED", result["reasons"])
         self.assertFalse(result["deployment_executed"])
         self.assertEqual(result["natural_credit"], 0)
 
