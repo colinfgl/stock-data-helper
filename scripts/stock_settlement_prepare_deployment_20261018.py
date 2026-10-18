@@ -102,7 +102,8 @@ def prepare_successor(live, candidate, evidence):
     # transition this state. Keep this preparation tool permanently read-only.
     issues.append("EXTERNAL_AUTHORITY_RECEIPTS_NOT_CRYPTOGRAPHICALLY_VERIFIED")
     if issues:
-        return {"status": "BLOCK_NEW_SUCCESSOR", "reasons": issues}
+        return {"status": "BLOCK_NEW_SUCCESSOR", "reasons": issues,
+                "deployment_executed": False, "natural_credit": 0}
     return {"status": "READY_FOR_SEPARATE_AUTHORIZED_CUTOVER",
             "deployment_executed": False, "natural_credit": 0,
             "task_id": TASK, "live_prompt_sha256": live_sha,
