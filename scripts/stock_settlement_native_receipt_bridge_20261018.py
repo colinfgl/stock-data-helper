@@ -28,6 +28,8 @@ def execute_same_run(*, context, report_bytes, client, spreadsheet_id,
     """
     if worker_task_id != EXPECTED_TASK:
         raise PermissionError("WRONG_SETTLEMENT_TASK")
+    if context.get("TaskID") != EXPECTED_TASK:
+        raise PermissionError("CONTEXT_TASK_ID_MISMATCH")
     if context.get("TaskProfile") != "STOCK_SETTLEMENT":
         raise PermissionError("WRONG_TASK_PROFILE")
     if context.get("TriggerClass") != "NORMAL_SCHEDULE":
