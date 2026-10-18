@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - 'scripts/stock_settlement_prompt_preflight_20261018.py'
+      - 'scripts/stock_settlement_prepare_deployment_20261018.py'
       - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
       - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
   workflow_dispatch:
@@ -43,5 +44,5 @@ jobs:
           assert result["status"] == "BLOCK", result
           print("SAFE_BLOCK_PASSED", result["reasons"])
           PY
-      - name: Eight fail-closed regression scenarios
+      - name: Twelve fail-closed regression scenarios
         run: python -m unittest discover -s tests -p 'test_stock_settlement_prompt_preflight_20261018.py' -v
