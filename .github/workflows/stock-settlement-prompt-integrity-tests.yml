@@ -1,0 +1,27 @@
+name: Stock settlement prompt integrity tests
+on:
+  push:
+    paths:
+      - 'scripts/stock_settlement_prompt_preflight_20261018.py'
+      - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
+      - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/stock_settlement_prompt_preflight_20261018.py'
+      - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
+      - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prompt-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax
+        run: python -m compileall -q scripts/stock_settlement_prompt_preflight_20261018.py tests/test_stock_settlement_prompt_preflight_20261018.py
+      - name: Eight fail-closed regression scenarios
+        run: python -m unittest discover -s tests -p 'test_stock_settlement_prompt_preflight_20261018.py' -v
