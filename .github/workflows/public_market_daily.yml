@@ -1,7 +1,9 @@
 name: public-market-daily
 on:
   schedule:
-    - cron: '17 10 * * 1-5' # 18:17 Asia/Taipei, before the existing 19:00 report
+    - cron: '47 7 * * 1-5'  # 15:47 Asia/Taipei, early public-source attempt
+    - cron: '17 9 * * 1-5'  # 17:17 Asia/Taipei, retry if exchange original was delayed
+    - cron: '17 10 * * 1-5' # 18:17 Asia/Taipei, final planned pre-report attempt
   workflow_dispatch:
     inputs:
       target_date:
