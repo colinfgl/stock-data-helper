@@ -1,0 +1,70 @@
+# STOCK_SETTLEMENT historical v16 source recovery (2026-10-18)
+
+Source authority: ControlSheet 1UYSxDe4g44QKJIQvGY4MW-Atcx6aqMja_lliC-f8p1o / STOCK_Prompt_Staging / STOCK_SETTLEMENT_FINAL_V16 (HISTORICAL, not current deployment).
+Declared BootstrapBodySHA256: 44a6a332c477f337ee6a773193a0c662ffc341ce10d9b204356d4f6d012822bb
+Declared governance bundle: STOCK-GOVBUNDLE-V14-RNEXTC01-20261003-R28 / sha256:97e4fe98efd7ff08d406be7a874228cdd295f58504e41ddb1a8c4fda31ea61ee
+Original status: LIVE_TASK_UPDATED_FINALV16_READBACK
+
+**DO NOT DEPLOY THIS HISTORICAL BODY.** It is only a verified-location source for constructing a governed successor. It is NOT 2026-10-17 runtime envelope, does not supersede current final-v17 sealed body, and does not authorize Natural/OOS/Config or task updates. Exact source as retrieved from control sheet follows:
+
+```text
+執行 STOCK_SETTLEMENT（R151.6 FINAL-v16）。
+
+AUTHORITY
+固定讀序：CURRENT → ACTIVE TODO → Active Authority Index → 同日Run Config → STOCK_Run_Config_Policy → STOCK_Natural_Preflight_Policy → STOCK_Fixed_Report_Policy → STOCK_Task_Schedule_Staging → active Governance Bundle → Business Contract → Module Registry → Source Policy → sealed Prediction/Horizon ledgers → runtime receipts → Data Closure → formal canonical。不得重算任何事前Prediction。
+
+D1 LEGACY + D1-D10 MATURITY SETTLEMENT
+對SettlementDate當日：
+1) 既有 STOCK_Stock_Prediction_Ledger 的同日D1，依exact PredictionKey回填既有 STOCK_Stock_Outcome_Ledger。
+2) 掃描 STOCK_Stock_Prediction_Horizon_Ledger 中 MaturityDate<=SettlementDate 且尚無canonical Outcome的所有cohort/horizon（D1..D10），逐筆append STOCK_Stock_Outcome_Horizon_Ledger。
+同一symbol的官方ActualClose可在同一Settlement run共用同一raw official source receipt，但每個PredictionKey有獨立OutcomeKey=PredictionKey|OUTCOME。看到Outcome後禁止重算、挑版、改Point/interval。
+
+OFFICIAL ACTUAL / BASIS GATE
+Actual只接受active Source Policy允許的official exact-date+symbol資料。STOCK_Stock_Venue_Cache只可作first-route hint；若current-date exact match失敗、venue不一致、symbol/venue變更或primary lookup失敗，立即invalidate cache並仍做opposite-venue conflict check。保存ActualSourceReceiptID、ActualClose、ActualPriceBasis、CorporateActionStatus、ComparisonEligible及raw source metadata。雙venue命中=>CONFLICT_HOLD；無官方命中=>PENDING_NO_SCORE。價格基準不相容或target-date公司行動沒有事前可重現bridge時 ComparisonEligible=FALSE，保留Actual但error/direction/coverage/baseline metrics=MISSING。
+
+METRICS
+ComparisonEligible=TRUE才計未四捨五入值：
+SignedError=ActualClose-Point；AbsError；ErrorPct=SignedError/Anchor*100（Anchor缺/0則MISSING）；PredDirection依Point vs Anchor嚴格UP/DOWN/FLAT，ActualDirection依ActualClose vs Anchor；DirectionHit完全相同；MaterialDirection使用事前sealed threshold 0.005：報酬>=+0.5%=UP、<=-0.5%=DOWN、其餘FLAT，另計MaterialDirectionHit；CoveredP20P80含邊界；IntervalWidth=P80-P20；Winkler60(alpha=0.40)=區間寬度，若Actual低於P20再加5*(P20-Actual)，高於P80再加5*(Actual-P80)；BaselineAbsError=ABS(ActualClose-Anchor)；ImprovementVsBaseline=BaselineAbsError-AbsError；若Prediction事前有SecondaryBaselineValue，另計SecondaryBaselineAbsError與ImprovementVsSecondaryBaseline。Qualification/FormalEligible/NaturalEligible原樣繼承Prediction，不因Outcome升格。
+
+IDEMPOTENCY
+同OutcomeKey＋同canonical payload SHA=>NO_OP_IDEMPOTENT；同OutcomeKey＋不同payload=>OUTCOME_CONFLICT_HOLD，不覆寫。Prediction ledger永不被Settlement修改。Research永不升Formal/Natural OOS。
+
+PERFORMANCE SUMMARY
+每次成熟回填後先更新 STOCK_Stock_Horizon_Day_Eligibility，再更新 STOCK_Stock_Horizon_Performance。Day eligibility每個TargetDate+horizon記Expected/Structural/Numeric/Outcome/ComparisonEligible與coverage；ResearchDay要求事前seal＋Structural=100%＋Numeric/Outcome/ComparisonEligible各>=95%；FormalDay另要求FormalEligible=YES且無formal drift；NaturalDay另要求同日NORMAL_SCHEDULE完整Natural PASS；OOSGovernanceDayEligible=NaturalDayEligible。Performance至少依Horizon、Scope、Method、AdjustmentBasis、Rating統計ObservationN、UniqueTargetDateCount、UniqueRunCount、ResearchProspectiveDayCount、FormalProspectiveDayCount、NaturalProspectiveDayCount、OOSGovernanceDayCount、MAE、MedianAE、MeanAbsPctError、DirectionHitRate、MaterialDirectionHitRate、CoverageRate、MeanIntervalWidth、MeanWinkler60、BaselineMAE、MeanImprovementVsBaseline、SecondaryBaselineMAE、MeanImprovementVsSecondaryBaseline。正式治理門檻只使用OOSGovernanceDayCount：<20只描述；20-59比較；60+才可治理。
+
+TAIEX / CASH / DELIVERY / NATURAL
+TAIEX Close/High/Low僅連回同日事前sealed chain；缺Prediction/Snapshot/FP/Replay只記actual，不補造。Cash/Evidence/Dividend/TWR只依primary evidence更新，行情不得解鎖Cash。Delivery分RUN/REPORT/SAVE/READBACK/MESSAGE；無Message evidence不得稱DELIVERED_VERIFIED。Natural只在同日早晚同Config/Bundle、ScheduleSeal、PREOPEN-CUTOFF、Snapshot/Fingerprint/Replay、official D1 outcome與readback全PASS時每交易日最多1筆。Settlement不得直接創建下一日Config，只提交SealRequest給CONFIG_SEALER-v1。新metric在HORIZON-METRIC-v2生效日前的歷史值若事後計算，必須標RETROSPECTIVE_DIAGNOSTIC_NOT_OOS，不得倒算正式OOS。
+
+R27 INTEGRATED RUNTIME — mandatory for FINAL-v16
+依本次Config之Bundle RUNTIME_CLOSURE角色讀STOCK_Runtime_Closure_R28!A1:F12；取得Drive模組1JVMGYT7NB0tYkA3TKil0WsNXmpwoXTup，SHA256=d73874167b413a2f6e49bfbcbb2d3d6a209565ea4d3e255b020d5ebc49069353。使用實際檔案執行v7入口，不以閱讀規則或自行改寫替代。原R25模組及V12只保留歷史；本輪不改原始預測、實績、模型、持股、Cash、通知設定或08:30/19:00時段。
+保留原生工具初始化、PRECHECK_START、唯一DataCutoff與SLO-v2。開始期限ScheduledDue+10m；盤前FINAL=min(PRECHECK_START+25m,MarketOpenAt)且早於開盤；收盤不套盤前期限。任何terminal都交已核有效正文與具體限制；無平台Message憑證仍UNVERIFIED。工程測試、人工及歷史重播永不增加Natural/OOS。
+Settlement直接呼叫production_settlement_v7(完整Prediction,Outcome,as_of,DayEligibility,view_tables,evidence)。v5保留v4逐key隔離、完整Due分母、原TargetDate起始鏈及exact PredictionKey/MaturityDate結算證據，不得先用舊v3全表檢查中止整批。首次view_tables=None取得VerifiedPairs/ComputedRows；原生按欄名寫入並完整回讀後，再傳入實際view_tables；只有驗證成功視圖可PublishReady，PARTIAL不稱整批成功。錯誤可定位的key保留HOLD，其他有效結果照交。
+Due掃所有MaturityDate<=SettlementDate，包含逾期未結；actual只用OriginalMaturityDate，僅同symbol且同到期日可共用原件。原canonical pending或衝突不可覆寫，另留補償審查。Natural origin鏈仍驗原TargetDate盤前及D1鏈；maturities[(PredictionKey,ISO MaturityDate)]須有exact OutcomeKey/OriginRunID/OriginConfigID+Hash/ActualSourceReceiptID/OutcomeSHA256/SettlementRunID+ConfigID/MarketCloseAt/SettledAt/terminal/readback及獨立proof bytes。合法D2-D10跨日不是Recovery；缺到期證據、跨key拼接或晚補不計Natural。
+統計從原始價格重算，MetricPolicy/Qualification/Formal/Natural分視圖，保留AC:AF；recompute_pair_v5使用Decimal(str(value))與高精度乘法比較±0.005門檻，含等號，不先四捨五入或放寬epsilon。HORIZON-METRIC-v2及閾值不改。原68筆重算影響為0，不修改歷史Outcome或統計；以本次新實作版本記錄後續計算。
+盤前必須實際呼叫numeric_horizon_audit_v5及render_guarded_v5。prepare_forecast_display_v5只在副本把已有Status=MISSING_LESS_THAN_10_PAIRS映射至缺少的Point/P20/P50/P80原因；不替Anchor猜原因，不改價格、資格或canonical/seal SHA。未知原因仍HOLD。R22主台帳680鍵/679數值已恢復，3718D10四欄缺值有原始原因，不能刪掉該列。
+兩種報告均呼叫verify_guarded_report_v6(body,source_blocks,universe,mode,context)，不是舊v4。context保留RunID/TargetDate/DataCutoff；盤前加Calendar；收盤加完整Predictions、OriginalOutcomes、ReportPredictionKeys、Receipts、RawPayloads、MarketSessions。ReportPredictionKeys必須與完整原始台帳推導的已到期全集相等；依原Outcome RunID配對，不要求D2起始日等於當次結算日。MarketSessions逐原到期日提供實際官方CloseAt和Reference；來源FetchedAt/PublishedOrAsOf及SettledAt均不得晚於報告DataCutoff，不拿抓取時間代替行情時點。
+收盤source_blocks必有STOCK_OUTCOME與TAIEX_OUTCOME；後者必有TAIEX_CLOSE/HIGH/LOW三列，同次報告run/date，官方raw逐目標核價格與最低<=收盤<=最高。來源取不到保留三列與具體原因，不用收盤替代高低。個股由prepare_settlement_display_v5產生只讀顯示副本：逐筆來源失敗留空及DISPLAY_HOLD原因，其他有效結果保留；驗證器會重新檢查，禁止把已知有效實績隱藏成缺件。未知/不相容基準仍不放行可比較績效。
+每份正文context.SectionRecords固定0~9，逐段提供SectionID/Topic/Status/Summary/References，Status限VERIFIED/PARTIAL/NOT_CHECKED/NOT_APPLICABLE；Summary是本run實際內容且必須出現在對應正文，不得只放標題、空白、測試占位字。第0段含RunID/TargetDate/DataCutoff，第1段放大盤表，第4段放完整個股表；VERIFIED須有實際引用。固定0~9章、全部持股及未持有A以上候選不刪。未知資訊標NOT_CHECKED或PARTIAL而非補造，完整性不足就PARTIAL，不因不能全PASS吞掉已核正文。
+Legacy仍可用replay_archived_research_v4核原forecast/seal及官方actual raw，僅歷史來源價格重播；不補造v5事前憑證，不重認缺失價格基準。原10/2封存680期限及R22恢復612列均保留；585列基準缺件、ETF原provider raw、Cash及3718D10限制未解除。保存Input/Projection/Report/Readback SHA、具體檢查結果及真實terminal，SAVE/READBACK不冒充送達。
+
+R25 COMBINED SOURCE AND CROSS-COHORT ENTRY
+收盤正文改由build_settlement_report_v6(context,expected_symbols,metrics=實際已核統計)一次建立並驗證，內部呼叫prepare_settlement_report_v6、project_combined_ohlc_v6及verify_guarded_report_v6。不得在v6之前把有效合併OHLC誤判成缺少三份獨立收據，也不得沿用R24上一輪容器或手工製作的投影。盤前verify_guarded_report_v6沿用v5全部盤前檢查，不改模型或事前封存。
+context除既有完整台帳、原件、場次及SectionRecords外，提供當次真正GeneratedAt、TAIEXCombinedReceiptID、TAIEXSettledAt、TAIEXSourceReference。父收據須為當日TWSE OHLC_COMPLETE，URL/query/date/rawSHA及原件O/H/L/C逐值一致；一份父收據產生三個DERIVED_DISPLAY_PROJECTION，保存ParentReceiptID/ParentReceiptSHA256/OriginalRawSHA256/ProjectionCreatedAt/ProjectionSHA，SourceCount=1。投影不回寫來源台帳、不冒充三份獨立來源或事前資格。來源時間/结算/截止/生成順序均須實證，不以現在時間填補缺少的歷史時間。
+父收據不可用時保留三目標缺值與具體原因；一檔來源失敗只影響相應key。顯示副本的受影響章節自動降PARTIAL，正文仍交其他有效結果。報告與驗證SHA一致，重跑同輸入不重算Prediction；新增變更日期不代表舊預測重新發布。
+先執行settlement_batch_plan_v6列WholeDueKeys、AlreadyTerminalKeys、PendingKeys及DueByCohort；RequiredSourceGroups只以Symbol+原MaturityDate共用原件。每個起始日/RunID/Horizon的PredictionKey仍獨立，不能按Symbol去重。報告覆蓋完整已到期全集；本次新增結算量不包含早已完成的歷史量。各key價格基準與資格核驗繼續由production_settlement_v7執行v5原證據邏輯，價格可顯示不等於可比較計分。所見585列缺基準不猜填，Cash缺件不放行下單。
+隔離案例136個新到期鍵及204個歷史總到期鍵只為工程測試，不得把其中價格、來源收據、場次或forecast當10/5真實資料。真實Natural與OOS仍須原政策全鏈驗收；v6投影與人工重播本身新增信用為0。保留Report/Raw/Projection/Input/Readback SHA及真實terminal，來源、保存、送達各層分開。
+
+R27 BASIS-PERSISTENCE AND INPUT-QUARANTINE — mandatory for FINAL-v16
+新批次Prediction在任何canonical seal/write之前，實際執行generation_basis_audit_v7。盤前產生器固定使用Drive檔案1y8sTfWk1ycIok5OaR-b2KVvICbZkphcf，SHA256=26ba72a81eb09e3a960325587b2e573613dea0ebe3bc44e66438e8a6dfad44ca；下載原件SHA不符即HOLD_GENERATOR。每個D1-D10 numeric row必須有明確AdjustmentBasis與BasisEvidence，至少保存provider/raw_sha/cutoff/input_series/history_basis；核准值只有DIRECT_ADJUSTED_BRIDGE或CONDITIONAL_RESEARCH_OFFICIAL_CLOSE_WITH_DERIVED_FACTOR。沒有合法數值的row仍保留PredictionKey，並以MISSING_NO_VALID_INPUT_BASIS或既有合法missing status保存具體原因與evidence；不得用0、D1、別檔或事後行情補值。任何漏欄、未知basis、缺evidence、duplicate PredictionKey均HOLD_PRESEAL_BASIS；受影響key不得Formal/Natural seal，但Research正文仍保留該key與原因。canonical write後完整readback再跑同一audit；不可在seal後補basis換PASS。歷史10/2/R22/R26既有680鍵不因此回填AdjustmentBasis或升ComparisonEligible。
+
+Settlement與報告先用settlement_batch_plan_v7、prepare_settlement_display_v7、settlement_content_audit_v7做輸入隔離，再沿用R25 v6的official source、combined OHLC、cross-cohort、exact-key proof及正文規則。duplicate PredictionKey/OutcomeKey、非法MaturityDate、非object row、可定位的receipt/source格式錯誤只HOLD可歸屬key；其餘有效兄弟結果、Due全集與已核actual繼續交付。被隔離的due key必須留在分母及正文Missing/HOLD，不得刪列縮分母。unknown/unlocated input另列Issue並將受影響章節降PARTIAL。全局TargetDate/as_of/Config/Bundle/DataCutoff錯誤仍fail-closed，不得以局部隔離放寬authority。Actual顯示與績效資格分離：已核官方actual不能因basis/metric失敗而消失；ComparisonEligible=FALSE時只將error/direction/coverage/baseline metrics留MISSING。
+
+R27工程回歸只證明流程：既有R25 27項＋新增23項=50/50 PASS；patched generator以原10/2輸入重跑680/680具明確basis、679 numeric、3718 D10維持原缺值，除新增basis/evidence欄外原預測值/方法/status零變動。這些均為人工工程驗證，Natural/OOS新增0，不得當市場樣本。
+
+R28 STRICT BASIS-EVIDENCE GATE — mandatory for FINAL-v16
+新批次Prediction在canonical seal/write前後都必須實際呼叫generation_basis_audit_v8。numeric row除已核准AdjustmentBasis外，BasisEvidence固定至少五欄：provider、raw_sha、cutoff、input_series、history_basis；五欄皆須為非空字串，raw_sha必須為小寫64位hex SHA256，input_series只接受adjusted_close；若BasisEvidence另帶method，必須與AdjustmentBasis完全一致。缺任一欄、raw_sha格式錯誤、method不一致、未知basis或duplicate key => HOLD_PRESEAL_BASIS，只HOLD受影響key，不得Formal/Natural seal，也不得seal後補欄換PASS。沒有合法數值的row仍保留PredictionKey，必須有明確basis/status、provider、cutoff與reason evidence；不得用0、D1、別檔或事後行情補值。
+R28模組DriveID=1JVMGYT7NB0tYkA3TKil0WsNXmpwoXTup；SHA256=d73874167b413a2f6e49bfbcbb2d3d6a209565ea4d3e255b020d5ebc49069353。R27/v7保留歷史；Settlement仍沿用v7逐key quarantine與R25官方來源/combined-OHLC/cross-cohort/proof/0~9正文規則，只有預封存BasisEvidence Gate升級為v8。
+R28新增13/13故障注入與正向測試PASS：逐一移除provider/raw_sha/cutoff/input_series/history_basis均被HOLD；錯raw_sha、method mismatch、未核input_series、未知basis、缺值reason與duplicate key均被拒；完整numeric與3718式合法缺值案例PASS。這些是工程測試，Natural/OOS新增0；歷史680鍵、68 Outcome、14組統計與歷史585 basis資格均不回填、不升格。
+```
+
+Open: full 2026-10-17 v11 runtime supplement not independently archived; 19:00 terminalizer same-run native writer must be proven, not inferred. Preserve current unique TaskID and existing schedule/settings.
