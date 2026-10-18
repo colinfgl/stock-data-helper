@@ -11,7 +11,7 @@ class NoClient:
         raise AssertionError("MUST_NOT_WRITE")
 
 def kwargs():
-    return dict(context={"TaskProfile":"STOCK_SETTLEMENT","TriggerClass":"NORMAL_SCHEDULE"},
+    return dict(context={"TaskProfile":"STOCK_SETTLEMENT","TaskID":EXPECTED_TASK,"TriggerClass":"NORMAL_SCHEDULE"},
                 report_bytes=b"test", client=NoClient(), spreadsheet_id="control",
                 lease_token="lease", lease_verified=True,
                 worker_task_id=EXPECTED_TASK,
@@ -21,6 +21,10 @@ class GuardTests(unittest.TestCase):
     def test_reject_wrong_task(self):
         x=kwargs();x["worker_task_id"]="other"
         with self.assertRaisesRegex(PermissionError,"WRONG_SETTLEMENT_TASK"):
+            execute_same_run(**x)
+    def test_reject_spoofed_context_task(self):
+        x=kwargs(); x["context"]["TaskID"]="OTHER-TASK"
+        with self.assertRaisesRegex(PermissionError,"CONTEXT_TASK_ID_MISMATCH"):
             execute_same_run(**x)
     def test_reject_manual_trigger(self):
         x=kwargs();x["context"]["TriggerClass"]="MANUAL"
