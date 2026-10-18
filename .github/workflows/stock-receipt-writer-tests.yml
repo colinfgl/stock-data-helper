@@ -1,0 +1,25 @@
+name: Stock receipt writer tests
+on:
+  push:
+    paths:
+      - 'scripts/stock_receipt_native_writer_v1_20261018.py'
+      - 'tests/test_stock_receipt_native_writer_v1_20261018.py'
+      - '.github/workflows/stock-receipt-writer-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/stock_receipt_native_writer_v1_20261018.py'
+      - 'tests/test_stock_receipt_native_writer_v1_20261018.py'
+      - '.github/workflows/stock-receipt-writer-tests.yml'
+  workflow_dispatch:
+jobs:
+  receipt-writer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m compileall -q scripts/stock_receipt_native_writer_v1_20261018.py tests/test_stock_receipt_native_writer_v1_20261018.py
+      - run: python -m unittest discover -s tests -p 'test_stock_receipt_native_writer_v1_20261018.py' -v
