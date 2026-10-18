@@ -95,6 +95,12 @@ def prepare_successor(live, candidate, evidence):
             issues.append("SUCCESSOR_GENERATION_NOT_DECLARED")
     except ValueError as exc:
         issues.append(str(exc))
+    # The local checker cannot authenticate approvals, native Google Sheets
+    # readbacks or a genuinely fresh two-task rollback. Arbitrary nonempty
+    # strings must NEVER be sufficient to authorize a live task mutation.
+    # Only an independently verified external control-plane cutover may
+    # transition this state. Keep this preparation tool permanently read-only.
+    issues.append("EXTERNAL_AUTHORITY_RECEIPTS_NOT_CRYPTOGRAPHICALLY_VERIFIED")
     if issues:
         return {"status": "BLOCK_NEW_SUCCESSOR", "reasons": issues}
     return {"status": "READY_FOR_SEPARATE_AUTHORIZED_CUTOVER",
