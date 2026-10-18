@@ -52,3 +52,11 @@
 2. 5222 全訊，2026-08-05公開資訊觀測站公告的新聞轉載 https://m.moneydj.com/f1a.aspx?a=03ED5ED3-1996-4366-AAD1-E0064587FA86 載明2026-08-20除權，調整後每股股票股利0.99966641元，理論因子1.099966641；與研究表1.099966641數字相同。公開資訊觀測站原件bytes尚未在本輪取得，列為「公告轉載交叉核對」，不可聲稱原件已封存。
 
 上述只降低 **event date/rate source uncertainty**，不解除 issuer historical original-adjusted price raw / PIT as-of / venue basis Gate。兩筆原正式FormalEligible=NO、PITCredit=0保持不變。不是模型提權、不是10/19預測、不是Natural收據。
+
+
+## 2026-10-18｜6831邁科三項公司行動日期再核對
+對照既有STOCK_IssuerFinal_20261017三個事件鍵：
+- 6831|2024-08-16|dividends：每股現金股利0.77870000元；2024-08-16除息交易日。第一手公開資訊觀測站決議的轉載 https://www.moneydj.com/kmdj/news/newsviewer.aspx?a=fbfb1209-b599-4c65-9f2d-ce797e3a62d3 ，事件日期由 https://stock.pchome.com.tw/stock/sto3/ock1/sid6831.html 交叉核對。
+- 6831|2024-08-16|splits：盈餘轉增資配股0.54890000元/股，2024-08-16除權日；轉載及PChome來源同上。研究值1.05489=1+0.5489/10，但這不是完整上市PIT調整價。
+- 6831|2025-06-12|dividends：每股現金股利1.25元、2025-06-12除息交易日、2025-07-18發放日；公開資訊觀測站重大訊息由第一銀行引述 https://wealth.firstbank.com.tw/investment-tips/trend-insight/news/news-detail?id=%7BB66B5384-D964-489A-9CA0-63973BCE42CB%7D 。
+這些來源解決**事件日期／每股股利研究核對**，不構成交易所或券商原始調整股價raw/PIT履歷，不升級FormalEligible=NO、PITCredit=0。直接維持原控制台研究原列不改。
