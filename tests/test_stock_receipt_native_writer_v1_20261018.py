@@ -27,8 +27,8 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(len(db.data['STOCK_Delivery_Receipt']),2)
         # Sheets may omit physically empty trailing cells on readback.
         db.data['STOCK_Delivery_Receipt'][1] = db.data['STOCK_Delivery_Receipt'][1][:19]
-        with self.assertRaises(ValueError):
-            write_native_receipts(plan=plan,actions=actions,client=db,spreadsheet_id='S',lease_token='T',lease_verified=True)
+        resumed=write_native_receipts(plan=plan,actions=actions,client=db,spreadsheet_id='S',lease_token='T',lease_verified=True)
+        self.assertEqual(resumed['STOCK_Delivery_Receipt'],'NO_OP_READBACK_PASS')
         db.data['STOCK_Delivery_Receipt'][1] = a.copy()
         db.data['STOCK_Delivery_Observability'][1][13]='b'*64
         with self.assertRaises(ValueError):
