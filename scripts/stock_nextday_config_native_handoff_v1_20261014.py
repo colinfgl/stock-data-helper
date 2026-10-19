@@ -151,7 +151,7 @@ def resume_pending_target(rows,draft,lease,snapshot,before_captured_at):
     request_clock=valid_clock(snapshot.get("requested_at"))
     checked=valid_clock(before_captured_at)
     if (request_clock is None or checked is None or
-        stage_clock>checked or stage_clock>request_clock or
+        stage_clock>checked or stage_clock<request_clock or
         not before_target_preopen(target,row[3].replace(" Asia/Taipei","+08:00"))):
         return hold("PENDING_ORIGINAL_SEAL_TIME_OUTSIDE_PREOPEN")
     for j,expected in enumerate(draft["row"]):
@@ -467,6 +467,17 @@ def selftest():
     check("resume_prohibits_duplicate_append",
           resumed.get("stage_manifest",{}).get("stage_request") is None and
           resumed.get("stage_manifest",{}).get("skip_native_stage_write") is True)
+    # Regression: stage must be at/after the request, never before it.
+    # A genuine native write occurs after a SealRequest, not before.
+    later_stage=copy.deepcopy(stage)
+    later_stage["rows"][-1][3]="2026-10-14 19:26:00 Asia/Taipei"
+    check("resume_stage_written_after_request_accepted",
+          prepare(ss,later_stage,lease,"2026-10-14T19:29:10+08:00").get("decision")==
+          "RESUME_PENDING_STAGE_ALREADY_NATIVE_NO_DUPLICATE_WRITE")
+    earlier_stage=copy.deepcopy(stage)
+    earlier_stage["rows"][-1][3]="2026-10-14 19:24:00 Asia/Taipei"
+    check("resume_stage_written_before_request_rejected",
+          prepare(ss,earlier_stage,lease,"2026-10-14T19:29:10+08:00").get("decision")=="HOLD")
     check("resume_preserves_original_native_seal_time",
           resumed["stage_manifest"]["stage_row"][3]==plan["stage_row"][3])
     check("resume_does_not_mint_formal",
