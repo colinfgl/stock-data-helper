@@ -27,7 +27,7 @@ jobs:
           x=json.load(open('native_sealer_qa/planner36.json'))
           assert x['status']=='PASS' and x['passed']==x['total']==40,x
           PY
-      - name: Verify exact 24-column native two-phase payload and 60 failure/positive guards
+      - name: Verify exact 24-column native two-phase payload and 62 failure/positive guards
         run: |
           python -m py_compile scripts/stock_nextday_config_native_handoff_v1_20261014.py
           python scripts/stock_nextday_config_native_handoff_v1_20261014.py \
@@ -35,7 +35,7 @@ jobs:
           python - <<'PY'
           import json
           x=json.load(open('native_sealer_qa/native_stage_readback.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==60,x
+          assert x['status']=='PASS' and x['passed']==x['total']==62,x
           assert x['test_scope']=='SYNTHETIC_TWO_PHASE_CONNECTOR_REQUEST_NO_NATIVE_EXTERNAL_WRITE_NO_FORECAST_NATURAL'
           assert x['example_stage_request']['updateCells']['range']['sheetId']==508116522
           assert x['example_stage_request']['updateCells']['range']['startColumnIndex']==0
@@ -45,7 +45,7 @@ jobs:
           commit=x['example_promotion_request']['updateCells']
           assert commit['range']['startColumnIndex']==2 and commit['range']['endColumnIndex']==3
           assert commit['rows'][0]['values'][0]['userEnteredValue']['stringValue']=='PRESEALED'
-          print('60 cases; actual ACTIVE_OWNED source and same physical token; single-lease safe pending resume without duplicate append; post-08:10/future stamped receipts held; 24-cell pending stage; readback; one-cell activation; final readback; Natural/OOS=0')
+          print('62 cases; actual ACTIVE_OWNED source and same physical token; single-lease safe pending resume without duplicate append; post-08:10/future stamped receipts held; 24-cell pending stage; readback; one-cell activation; final readback; Natural/OOS=0')
           PY
       - name: Archive exact synthetic contract and stage request
         if: always()
