@@ -1,0 +1,40 @@
+{
+  "Symbol": "3017.TW",
+  "VendorOriginalRawSHA256": "56acccafdb7dcadec1c9627155efe151b7efee37f544d7683f90570e17dc2d3d",
+  "FormalEligible": false,
+  "NaturalCredit": 0,
+  "OOSCredit": 0,
+  "IssuerEvents": [
+    {
+      "EventDate": "2025-08-19",
+      "IssuerFinalPerShare": 9.93036998,
+      "PublishedAt": "2025-08-04",
+      "EvidenceRole": "ISSUER_ORIGINAL_FIRSTPARTY_WITH_RAW_SHA",
+      "IssuerSourceRawSHA256": "c73fe103d73d6f6c0ddb70061635216f169a6f4634ebb81d56d52c5ac4e8d8a4",
+      "IssuerReprintURL": "https://www.moneydj.com/kmdj/news/newsviewer.aspx?a=1915de30-c6a7-4297-962a-95ca1a80a773",
+      "VendorPublicDividendURL": "https://tw.stock.yahoo.com/quote/3017/dividend",
+      "IssuerCapitalAndEarningsNote": "2025 final 9.93036998 total per share, Yahoo public dividend page rounded 9.9304, original chart 9.934345",
+      "IssuerOriginalURL": "https://mopsov.twse.com.tw/mops/web/ajax_t108sb22"
+    }
+  ],
+  "ResearchOnly": true,
+  "SourceScope": "Firstparty original raw bytes verified equal to 2026-10-17 capture. Parent MOPS results explicitly lists publication2025-08-04;2025-07-29 is decision/secondary notice date. Historical retrieval availability/PIT not proven. Vendor amount conflict remains HOLD.",
+  "IssuerOriginalPath": "research/stock_3017_mops_original_20250804_captured_20261020.html",
+  "IssuerOriginalRequest": {
+    "method": "POST",
+    "params": {
+      "firstin": "true",
+      "colorchg": "",
+      "TYPEK": "sii",
+      "isnew": "false",
+      "id": "",
+      "DATE1": "20250804",
+      "SEQ_NO": "1",
+      "COMP": "3017",
+      "kind": "",
+      "SKIND": "G",
+      "step": "2"
+    }
+  },
+  "RetrievedAt": "2026-10-20T10:43:34.186805+00:00"
+}
