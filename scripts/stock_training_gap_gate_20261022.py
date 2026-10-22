@@ -6,7 +6,7 @@ Do not reinterpret research-only rows as Formal/Natural/OOS PASS.
 import argparse
 import datetime as dt
 import json
-from collections import Counter
+import hashlib
 
 REQUIRED=("STOCK_Run_Config","STOCK_HistoryGap_20261017",
           "STOCK_EventResolved_20261017","STOCK_ETF_OriginalRecovery_20261017",
@@ -16,14 +16,26 @@ def audit(snapshot, target):
     if not isinstance(snapshot,dict) or any(k not in snapshot for k in REQUIRED):
         return {"verdict":"BLOCK","error":"INCOMPLETE_NATIVE_SNAPSHOT"}
     try:
-        dt.date.fromisoformat(target)
+        # Date must be an exact canonical calendar date, not a permissive ISO variant.
+        if not isinstance(target,str) or len(target)!=10 or dt.date.fromisoformat(target).isoformat()!=target:
+            raise ValueError("INVALID_CANONICAL_TARGET_DATE")
+        # Caller may bind raw snapshot bytes to a SHA256 in a separate metadata envelope.
+        # An unauthenticated caller-provided digest cannot establish provenance.
+        if "snapshot_sha256" in snapshot and (
+            not isinstance(snapshot["snapshot_sha256"],str)
+            or len(snapshot["snapshot_sha256"])!=64
+            or any(c not in "0123456789abcdef" for c in snapshot["snapshot_sha256"])
+        ):
+            raise ValueError("INVALID_SNAPSHOT_SHA256_FORMAT")
         sheets={k:v for k,v in snapshot.items() if k in REQUIRED}
         if any(not isinstance(v,list) or len(v)<2 for v in sheets.values()):
             raise ValueError("EMPTY_REQUIRED_SHEET")
         configs=sheets[REQUIRED[0]]
         if configs[0][:3]!=["TargetDate","ConfigID","Status"]:
             raise ValueError("UNEXPECTED_CONFIG_SCHEMA")
-        target_rows=[r for r in configs[1:] if len(r)>2 and r[0]==target]
+        if any(not isinstance(r,list) or len(r)<3 for r in configs[1:]):
+            raise ValueError("MALFORMED_CONFIG_ROW")
+        target_rows=[r for r in configs[1:] if r[0]==target]
         config_pass=len(target_rows)==1 and target_rows[0][2]=="PRESEALED"
         hist=sheets[REQUIRED[1]]
         if hist[0][0]!="Symbol" or hist[0][5]!="ProviderAdjusted":
@@ -33,7 +45,7 @@ def audit(snapshot, target):
         events=sheets[REQUIRED[2]]
         if events[0][0]!="EventKey" or events[0][7]!="VendorConflict":
             raise ValueError("UNEXPECTED_EVENT_SCHEMA")
-        conflicts=sum(1 for r in events[1:] if len(r)<9 or r[7]=="YES")
+        conflicts=sum(1 for r in events[1:] if len(r)<9 or r[7]!="NO")
         etfs=sheets[REQUIRED[3]]
         if etfs[0][0]!="Symbol" or etfs[0][13]!="FormalEligible":
             raise ValueError("UNEXPECTED_ETF_SCHEMA")
@@ -78,9 +90,17 @@ def selftest():
     assert audit(s,"2026-10-22")["config_presealed"] is True
     s["STOCK_Run_Config"].append(["2026-10-22","duplicate","PRESEALED"])
     assert audit(s,"2026-10-22")["config_presealed"] is False
+    s["STOCK_EventResolved_20261017"][1][7]="UNKNOWN"
+    assert audit(s,"2026-10-22")["issuer_conflicts"]==1
+    s["STOCK_EventResolved_20261017"][1][7]="NO"
+    assert audit(s,"2026-10-22")["issuer_conflicts"]==0
+    assert audit(s,"2026-2-2")["error"]=="INVALID_CANONICAL_TARGET_DATE"
+    s["STOCK_Run_Config"].append(["2026-10-22"])
+    assert audit(s,"2026-10-22")["error"]=="MALFORMED_CONFIG_ROW"
+    s["STOCK_Run_Config"].pop()
     del s["STOCK_EventResolved_20261017"]
     assert audit(s,"2026-10-22")["error"]=="INCOMPLETE_NATIVE_SNAPSHOT"
-    print(json.dumps({"selftest":"PASS","checks":6,"formal_credit":0}))
+    print(json.dumps({"selftest":"PASS","checks":10,"formal_credit":0}))
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser()
