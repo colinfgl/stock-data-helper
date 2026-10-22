@@ -27,7 +27,7 @@ def audit(snapshot, target):
         if any(not isinstance(r,list) or len(r)<3 for r in configs[1:]):
             raise ValueError("MALFORMED_CONFIG_ROW")
         target_rows=[r for r in configs[1:] if r[0]==target]
-        config_pass=len(target_rows)==1 and target_rows[0][2]=="PRESEALED"
+        config_pass=(len(target_rows)==1 and len(target_rows[0])>=24 and target_rows[0][2]=="PRESEALED" and isinstance(target_rows[0][19],str) and len(target_rows[0][19])==64)
         hist=sheets[REQUIRED[1]]
         if hist[0][0]!="Symbol" or hist[0][5]!="ProviderAdjusted":
             raise ValueError("UNEXPECTED_HISTORY_SCHEMA")
@@ -78,6 +78,8 @@ def selftest():
     assert (a["history_missing"],a["prelisting_cases"],a["issuer_conflicts"],a["etf_formal_blocked"])==(1,1,1,1)
     assert (a["formal_credit"],a["natural_credit"],a["oos_credit"])==(0,0,0)
     s["STOCK_Run_Config"].append(["2026-10-22","id2","PRESEALED"])
+    assert audit(s,"2026-10-22")["config_presealed"] is False
+    s["STOCK_Run_Config"][-1].extend([""]*16 + ["a"*64] + [""]*4)
     assert audit(s,"2026-10-22")["config_presealed"] is True
     s["STOCK_Run_Config"].append(["2026-10-22","duplicate","PRESEALED"])
     assert audit(s,"2026-10-22")["config_presealed"] is False
