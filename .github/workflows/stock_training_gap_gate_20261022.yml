@@ -1,6 +1,11 @@
 name: stock-training-gap-gate-synthetic-qa
 on:
   workflow_dispatch:
+    inputs:
+      target_date:
+        description: 'Target trading day YYYY-MM-DD (research audit only)'
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -21,6 +26,23 @@ jobs:
         run: |
           python -m py_compile scripts/stock_training_gap_gate_20261022.py
           python scripts/stock_training_gap_gate_20261022.py --self-test
+      - name: Audit uploaded native snapshot only when supplied
+        env:
+          TARGET_DATE: ${{ inputs.target_date }}
+        run: |
+          mkdir -p training_gap_qa
+          if [ -f official_inputs/stock_training_snapshot.json ] && [ -n "$TARGET_DATE" ]; then
+            python scripts/stock_training_gap_gate_20261022.py --input official_inputs/stock_training_snapshot.json --target "$TARGET_DATE" | tee training_gap_qa/audit.json
+          else
+            printf '%s\\n' '{"verdict":"NOT_RUN","reason":"NO_VERIFIED_NATIVE_SNAPSHOT_OR_TARGET","formal_credit":0,"natural_credit":0,"oos_credit":0}' | tee training_gap_qa/audit.json
+          fi
+      - name: Preserve explicit audit result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-training-gap-qa-${{ github.run_id }}
+          path: training_gap_qa/audit.json
+          if-no-files-found: warn
       - name: Clarify qualification
         run: |
           echo 'Synthetic QA only; no Google sheet write or historical formal credit.' >> "$GITHUB_STEP_SUMMARY"
