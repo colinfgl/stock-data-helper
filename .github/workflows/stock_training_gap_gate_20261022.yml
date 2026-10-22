@@ -1,0 +1,27 @@
+name: stock-training-gap-gate-synthetic-qa
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stock_training_gap_gate_20261022.py'
+      - '.github/workflows/stock_training_gap_gate_20261022.yml'
+permissions:
+  contents: read
+jobs:
+  fail-closed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test syntax and fail-closed training gate
+        run: |
+          python -m py_compile scripts/stock_training_gap_gate_20261022.py
+          python scripts/stock_training_gap_gate_20261022.py --self-test
+      - name: Clarify qualification
+        run: |
+          echo 'Synthetic QA only; no Google sheet write or historical formal credit.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Native evidence snapshots must still pass original source and authorized writer gates.' >> "$GITHUB_STEP_SUMMARY"
