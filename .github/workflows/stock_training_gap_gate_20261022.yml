@@ -34,7 +34,7 @@ jobs:
           if [ -f official_inputs/stock_training_snapshot.json ] && [ -n "$TARGET_DATE" ]; then
             python scripts/stock_training_gap_gate_20261022.py --input official_inputs/stock_training_snapshot.json --target "$TARGET_DATE" | tee training_gap_qa/audit.json
           else
-            printf '%s\\n' '{"verdict":"NOT_RUN","reason":"NO_VERIFIED_NATIVE_SNAPSHOT_OR_TARGET","formal_credit":0,"natural_credit":0,"oos_credit":0}' | tee training_gap_qa/audit.json
+            python -c 'import json; print(json.dumps({"verdict":"NOT_RUN","reason":"NO_VERIFIED_NATIVE_SNAPSHOT_OR_TARGET","formal_credit":0,"natural_credit":0,"oos_credit":0}))' | tee training_gap_qa/audit.json
           fi
       - name: Preserve explicit audit result
         if: always()
@@ -42,7 +42,7 @@ jobs:
         with:
           name: stock-training-gap-qa-${{ github.run_id }}
           path: training_gap_qa/audit.json
-          if-no-files-found: warn
+          if-no-files-found: error
       - name: Clarify qualification
         run: |
           echo 'Synthetic QA only; no Google sheet write or historical formal credit.' >> "$GITHUB_STEP_SUMMARY"
