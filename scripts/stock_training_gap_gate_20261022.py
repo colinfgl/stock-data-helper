@@ -84,7 +84,8 @@ def audit(snapshot, target):
                 "config_presealed":config_pass,"history_missing":history_missing,
                 "prelisting_cases":prelisting,"issuer_conflicts":conflicts,
                 "etf_formal_blocked":etf_block,"governance_nonzero":invalid_governance,
-                "projection_mismatch":projection_mismatch,"expected_guard_fail":coverage_fail,\n                "holds":holds,"formal_credit":0,"natural_credit":0,"oos_credit":0}
+                "projection_mismatch":projection_mismatch,"expected_guard_fail":coverage_fail,
+                "holds":holds,"formal_credit":0,"natural_credit":0,"oos_credit":0}
     except (ValueError,TypeError,IndexError,KeyError) as exc:
         return {"verdict":"BLOCK","error":str(exc),"formal_credit":0,
                 "natural_credit":0,"oos_credit":0}
