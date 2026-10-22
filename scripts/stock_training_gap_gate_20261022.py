@@ -6,7 +6,6 @@ Do not reinterpret research-only rows as Formal/Natural/OOS PASS.
 import argparse
 import datetime as dt
 import json
-import hashlib
 
 REQUIRED=("STOCK_Run_Config","STOCK_HistoryGap_20261017",
           "STOCK_EventResolved_20261017","STOCK_ETF_OriginalRecovery_20261017",
@@ -19,14 +18,6 @@ def audit(snapshot, target):
         # Date must be an exact canonical calendar date, not a permissive ISO variant.
         if not isinstance(target,str) or len(target)!=10 or dt.date.fromisoformat(target).isoformat()!=target:
             raise ValueError("INVALID_CANONICAL_TARGET_DATE")
-        # Caller may bind raw snapshot bytes to a SHA256 in a separate metadata envelope.
-        # An unauthenticated caller-provided digest cannot establish provenance.
-        if "snapshot_sha256" in snapshot and (
-            not isinstance(snapshot["snapshot_sha256"],str)
-            or len(snapshot["snapshot_sha256"])!=64
-            or any(c not in "0123456789abcdef" for c in snapshot["snapshot_sha256"])
-        ):
-            raise ValueError("INVALID_SNAPSHOT_SHA256_FORMAT")
         sheets={k:v for k,v in snapshot.items() if k in REQUIRED}
         if any(not isinstance(v,list) or len(v)<2 for v in sheets.values()):
             raise ValueError("EMPTY_REQUIRED_SHEET")
