@@ -46,7 +46,33 @@ def audit(snapshot, target):
             raise ValueError("UNEXPECTED_PERFORMANCE_SCHEMA")
         invalid_governance=sum(1 for r in perf[1:] if len(r)<23 or any(
             str(r[j]).strip() not in ("","0") for j in (20,21,22)))
+        # Optional same-snapshot performance controls: missing controls stay
+        # unverified rather than being silently called PASS.
+        projection=snapshot.get("STOCK_HorizonPerf_Canonical28_Readonly_20261016")
+        expected=snapshot.get("STOCK_Performance_Expected")
+        projection_mismatch=None
+        coverage_fail=None
+        if projection is not None:
+            if not isinstance(projection,list) or len(projection)!=len(perf):
+                projection_mismatch=len(perf)
+            else:
+                projection_mismatch=sum(
+                    1 for i,row in enumerate(perf)
+                    if row[:28]!=projection[i]
+                )
+        if expected is not None:
+            if (not isinstance(expected,list) or len(expected)<2
+                    or len(expected[0])<8
+                    or expected[0][7]!="CoverageGuard"):
+                coverage_fail="INVALID_EXPECTED_SCHEMA"
+            else:
+                coverage_fail=sum(1 for row in expected[1:]
+                                  if len(row)<8 or row[7]!="PASS")
         holds=[]
+        if projection_mismatch is None or coverage_fail is None:
+            holds.append("PERFORMANCE_READBACK_COMPARISON_NOT_VERIFIED")
+        elif projection_mismatch or coverage_fail:
+            holds.append("PERFORMANCE_READBACK_DRIFT")
         if not config_pass: holds.append("TARGET_CONFIG_NOT_UNIQUELY_PRESEALED")
         if history_missing: holds.append("HISTORY_PROVIDER_ADJUSTED_MISSING")
         if conflicts: holds.append("ISSUER_VENDOR_CONFLICT_OPEN")
@@ -58,7 +84,7 @@ def audit(snapshot, target):
                 "config_presealed":config_pass,"history_missing":history_missing,
                 "prelisting_cases":prelisting,"issuer_conflicts":conflicts,
                 "etf_formal_blocked":etf_block,"governance_nonzero":invalid_governance,
-                "holds":holds,"formal_credit":0,"natural_credit":0,"oos_credit":0}
+                "projection_mismatch":projection_mismatch,"expected_guard_fail":coverage_fail,\n                "holds":holds,"formal_credit":0,"natural_credit":0,"oos_credit":0}
     except (ValueError,TypeError,IndexError,KeyError) as exc:
         return {"verdict":"BLOCK","error":str(exc),"formal_credit":0,
                 "natural_credit":0,"oos_credit":0}
@@ -93,7 +119,17 @@ def selftest():
     s["STOCK_Run_Config"].pop()
     del s["STOCK_EventResolved_20261017"]
     assert audit(s,"2026-10-22")["error"]=="INCOMPLETE_NATIVE_SNAPSHOT"
-    print(json.dumps({"selftest":"PASS","checks":10,"formal_credit":0}))
+    s["STOCK_EventResolved_20261017"]=[e,["event"]+[""]*6+["NO"]+[""]*5]
+    s["STOCK_HorizonPerf_Canonical28_Readonly_20261016"]=[p,s["STOCK_Stock_Horizon_Performance"][1][:28]]
+    s["STOCK_Performance_Expected"]=[[""]*7+["CoverageGuard"],[""]*7+["PASS"]]
+    assert audit(s,"2026-10-22")["projection_mismatch"]==0
+    assert audit(s,"2026-10-22")["expected_guard_fail"]==0
+    s["STOCK_HorizonPerf_Canonical28_Readonly_20261016"][1][1]="DRIFT"
+    assert audit(s,"2026-10-22")["projection_mismatch"]==1
+    assert "PERFORMANCE_READBACK_DRIFT" in audit(s,"2026-10-22")["holds"]
+    s["STOCK_Performance_Expected"][1][7]="FAIL"
+    assert audit(s,"2026-10-22")["expected_guard_fail"]==1
+    print(json.dumps({"selftest":"PASS","checks":15,"formal_credit":0}))
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser()
