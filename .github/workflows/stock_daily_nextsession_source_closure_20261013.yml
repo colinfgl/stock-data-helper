@@ -8,10 +8,11 @@ on:
     types: [completed]
     branches: [main]
   push:
-    branches: [stock-generic-source-three-original-20261014, stock-source-report-continuity-20261014, stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
+    branches: [stock-source-verified-closures-20261026, stock-generic-source-three-original-20261014, stock-source-report-continuity-20261014, stock-daily-nextsession-source-20261013, stock-source-ohlc-provenance-20261013, stock-native-symbol-name-20261013, stock-integrate-dividend-sidecar-20261013, stock-partial-source-fallback-20261013, stock-readable-fallback-20261013, stock-short-history-proxy-20261013, stock-source-calendar-sha-same-manifest-20261013, stock-network-incomplete-read-retry-20261013, stock-source-schedule-revive-fallback-20261013, stock-source-recovery-debounce-20261013, stock-three-original-research-20261014]
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
+      - 'scripts/stock_verified_market_sessions_v1_20261026.py'
       - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
       - 'scripts/stock_partial_source_fallback_v1_20261013.py'
       - 'scripts/stock_short_history_research_proxy_v1_20261013.py'
@@ -42,12 +43,12 @@ jobs:
       - name: Compile and run source-window/date/quote-hash fail-closed self-tests
         run: |
           mkdir -p source_gate_qa
-          python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py
-          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/40_tests.json
+          python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py scripts/stock_verified_market_sessions_v1_20261026.py
+          python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/55_tests.json
           python - <<'PY'
           import json
-          x=json.load(open('source_gate_qa/40_tests.json'))
-          assert x['status']=='PASS' and x['passed']==x['total']==40
+          x=json.load(open('source_gate_qa/55_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==55
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
           PY
       - name: Validate optional dividend-factor research helper independently
@@ -168,6 +169,7 @@ jobs:
           path: |
             source_gate_qa/
             scripts/stock_daily_prior_close_source_closure_v1_20261013.py
+            scripts/stock_verified_market_sessions_v1_20261026.py
             scripts/stock_partial_source_fallback_v1_20261013.py
             scripts/stock_short_history_research_proxy_v1_20261013.py
             scripts/premarket_daily_inputs_3y_20261013.py
@@ -681,3 +683,4 @@ jobs:
           echo "Partial TWSE/TPEx HTTP bodies fail closed, save bounded original partial proof, and permit only one fresh retry. Synthetic HTTP fixture success does not qualify an actual symbol." >> "$GITHUB_STEP_SUMMARY"
           echo "Cross-midnight source date is bound to verified prior completed market day, never to next morning machine date; 08:09:30 cutoff enforced and old 10/12 original loaded for 10/13 source day only. All are RESEARCH, not Formal/Natural/OOS." >> "$GITHUB_STEP_SUMMARY"
           echo 'For future dates, dynamic research archive candidates come from exact current source receipt + prior-evening-only artifacts; every raw SHA/date remains separately verified. Missing archives HOLD optional recovery, not the whole partial report.' >> "$GITHUB_STEP_SUMMARY"
+

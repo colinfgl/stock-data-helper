@@ -130,6 +130,15 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
                 result[code]=x
         check(result,'OFFICIAL_CLOSE_EMPTY_'+market)
         return result
+    reviewed_closed=set();extra_originals={};emergency=[]
+    receipt=json.loads((folder/'acquisition_receipt.json').read_bytes())
+    if receipt.get('reviewed_market_context') is not None:
+        from stock_verified_market_sessions_v1_20261026 import verify_context
+        context=receipt['reviewed_market_context'];reviewed_closed=verify_context(context,folder)
+        for item in context['closures']:
+            for e in item['evidence']:
+                packed='official_raw/'+e['name'];extra_originals[packed]=(folder/e['file']).read_bytes()
+                if e['venue']=='TWSE':emergency.append({'session_date':item['date'],'file':packed,'url':e['url'],'sha256':e['sha256'],'retrieved_at':e['retrieved_at'],'scope':'FULL_DAY_MARKET','reviewed_exact_date':True})
     d=day.strftime('%Y%m%d'); t=target.strftime('%Y%m%d')
     official_files={'twse':folder/f'TWSE_{d}.json','tpex':folder/f'TPEX_{d}.json', 'ohlc':folder/'ohlc_raw.json'}
     raws={k:p.read_bytes() for k,p in official_files.items()}
@@ -168,7 +177,7 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
         dates=[dt.datetime.fromtimestamp(z,TZ).strftime('%Y%m%d') for z in timestamps]
         check(len(set(dates))==len(dates) and dates==sorted(dates),'SOURCE_DUPLICATE_DATES_'+ticker)
         check(dates[-1]==d,'SOURCE_CUTOFF_STALE_'+ticker)
-        check(not any(x> d for x in dates),'SOURCE_LEAKED_FUTURE_'+ticker)
+        check(not any(x>d for x in dates),'SOURCE_LEAKED_FUTURE_'+ticker)
         official_close=quote[market].get(code)
         check(isinstance(official_close,(int,float)) and math.isfinite(official_close) and official_close>0,'OFFICIAL_CLOSE_MISSING_'+ticker)
         j=dates.index(d)
@@ -204,11 +213,14 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
       'official_taiex_ohlc':taiex,'source_qualification':'RESEARCH_ONLY',
       'corporate_action_gate':'ISSUER_ALL_ACTIONS_NOT_EXHAUSTIVE','formal_input_qualified':False,
       'forecast_generated':False,'cash_changed':False,'natural_credit':0,'oos_credit':0}
+    index['emergency_closures']=emergency
+    index['reviewed_closure_original_count']=len(extra_originals)
     output.mkdir(parents=True,exist_ok=False)
     target_zip=output/('h9_source_'+t+'.zip')
     with zipfile.ZipFile(target_zip,'w',compression=zipfile.ZIP_DEFLATED) as zp:
         for role,raw in raws.items():zp.writestr('official_raw/'+('tpex' if role=='tpex' else role)+'.attempt1.json',raw)
         for name,raw in sorted(rawchart.items()):zp.writestr(name,raw)
+        for name,raw in sorted(extra_originals.items()):zp.writestr(name,raw)
     (output/'h9_source_index.json').write_text(json.dumps(index,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
     status={'status':'RESEARCH_SOURCE_68_OF_68_READY_NOT_FORMAL','target_date':target.isoformat(),
       'source_date':day.isoformat(),'ticker_count':68,'per_symbol_sha_count':len(entries),
@@ -222,9 +234,10 @@ def build_h9_package(folder: pathlib.Path, target: dt.date, day: dt.date, univer
     (output/'source_closure_readback.json').write_text(json.dumps(status,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
     # Verify archive bytes after close. Never trust only the writes.
     with zipfile.ZipFile(target_zip) as zp:
-        check(len(zp.namelist())==71 and len(set(zp.namelist()))==71,'PACKED_SOURCE_ENTRY_COUNT_BAD')
+        check(len(zp.namelist())==71+len(extra_originals) and len(set(zp.namelist()))==71+len(extra_originals),'PACKED_SOURCE_ENTRY_COUNT_BAD')
         for k,raw in raws.items():check(sha(zp.read('official_raw/'+k+'.attempt1.json'))==sha(raw),'PACK_OFFICIAL_BYTES_DRIFT_'+k)
         for filename,raw in rawchart.items():check(sha(zp.read(filename))==sha(raw),'PACK_CHART_BYTES_DRIFT_'+filename)
+        for filename,raw in extra_originals.items():check(sha(zp.read(filename))==sha(raw),'PACK_CLOSURE_BYTES_DRIFT_'+filename)
     return status
 
 def bind_calendar_to_source_index(pack:pathlib.Path,outer:pathlib.Path,original_sha:str,status:dict):
@@ -344,6 +357,17 @@ def selftest():
           (root/'source_closure_readback.json').read_bytes()) else 'FAIL'
         hold('reject_invalid_official_calendar_sha',
           lambda:bind_calendar_to_source_index(package,root,'invalid',new))
+    from premarket_daily_inputs_3y_20261013 import chart_source_url,resolve_calendar
+    from urllib.parse import urlparse,parse_qs
+    query=parse_qs(urlparse(chart_source_url('2330.TW','20261022')).query)
+    tests['chart_query_ends_before_closed23_bar']='PASS' if int(query['period2'][0])==int(dt.datetime(2026,10,23,tzinfo=TZ).timestamp()) else 'FAIL'
+    tests['chart_request_keeps_three_year_original']='PASS' if int(query['period1'][0])==int(dt.datetime(2023,10,22,tzinfo=TZ).timestamp()) and 'range' not in query else 'FAIL'
+    fixture={'stat':'ok','queryYear':2026,'data':[['2026-10-26','補假','']]}
+    planned=resolve_calendar([fixture],'2026-10-27',[dt.date(2026,10,23)])
+    tests['collector_uses_verified22_not_static23']='PASS' if planned['price_cutoff']=='20261022' and planned['previous_session']=='20261021' and planned['future_dates'][0]=='20261027' else 'FAIL'
+    from stock_verified_market_sessions_v1_20261026 import selftest as calendar_selftest
+    extra=calendar_selftest()
+    for name,status in extra['cases'].items():tests['reviewed_calendar_'+name]='PASS' if status else 'FAIL'
     return {'status':'PASS' if all(v=='PASS' for v in tests.values()) else 'FAIL',
             'passed':sum(v=='PASS' for v in tests.values()),'total':len(tests),'cases':tests,
             'scope':'PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'}
@@ -356,10 +380,8 @@ def main():
         o=selftest();print(json.dumps(o,ensure_ascii=False));return 0 if o['status']=='PASS' else 1
     out=pathlib.Path(args.out)
     try:
-        today=runtime_day_gate(dt.datetime.now(dt.timezone.utc))
-        base=today if args.day=='auto' else date8(args.day)
-        # Do NOT accept a manually forced future day as a genuine last-close source.
-        check(base==today,'BASE_DATE_NOT_TODAY_LOCAL')
+        candidate=runtime_day_gate(dt.datetime.now(dt.timezone.utc))
+        base=candidate
         from premarket_daily_inputs_3y_20261013 import get_json,calendar_days,collect
         calendar_dir=out.parent/(out.name+'_calendar_source')
         obj,fetch_meta=get_json('https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear='+str(base.year-1911),calendar_dir/'calendar.json')
@@ -369,14 +391,22 @@ def main():
             nxt,meta2=get_json('https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear='+str(base.year+1-1911),calendar_dir/'nextyear.json')
             check(nxt is not None,'NEXT_YEAR_OFFICIAL_CALENDAR_MISSING')
             payloads.append(nxt)
-        closed,years=calendar_days(payloads);target=next_session(base,closed,years)
-        check(runtime_day_gate(dt.datetime.now(dt.timezone.utc))==base,'SOURCE_DAY_WINDOW_CROSSED_OR_EXPIRED')
+        closed,years=calendar_days(payloads)
+        from stock_verified_market_sessions_v1_20261026 import fetch_context,verify_context,completed_session
+        review_root=calendar_dir/'reviewed_closures'
+        reviewed_context=fetch_context(candidate,review_root,dt.datetime.now(dt.timezone.utc))
+        closed |= verify_context(reviewed_context,review_root)
+        base=completed_session(candidate,closed,years)
+        check(args.day=='auto' or date8(args.day)==base,'REQUESTED_SOURCE_NOT_VERIFIED_LATEST_SESSION')
+        target=next_session(base,closed,years)
+        check(runtime_day_gate(dt.datetime.now(dt.timezone.utc))==candidate,'SOURCE_DAY_WINDOW_CROSSED_OR_EXPIRED')
         if args.mode=='PREFLIGHT_ONLY':
             result=closure_report(out,'VALID_CALENDAR_AND_POST_CLOSE_WINDOW_ONLY',status='PASS_PRECHECK_SOURCE_NOT_FETCHED')
             result['last_closed_day']=str(base);result['target_date']=str(target)
             print(json.dumps(result,ensure_ascii=False));return 0
         # Do not collect only three default symbols: request all 68 already in the public repo.
-        collected=out.parent/(out.name+'_raw');result=collect(collected,target.isoformat(),approved_universe())
+        collected=out.parent/(out.name+'_raw');result=collect(collected,target.isoformat(),approved_universe(),reviewed_context=reviewed_context,reviewed_context_root=review_root)
+        check(runtime_day_gate(dt.datetime.now(dt.timezone.utc))==candidate,'SOURCE_DAY_WINDOW_CROSSED_OR_EXPIRED')
         check(result['dates']['price_cutoff']==base.strftime('%Y%m%d'),'COLLECTOR_CUTOFF_NOT_SAME_LAST_CLOSE')
         chartstates={r['symbol']:r for r in result.get('charts',[])}
         statuses=[{'symbol':s,'status':chartstates.get(s,{}).get('status','SOURCE_NOT_COLLECTED'),
@@ -394,3 +424,4 @@ def main():
     except Exception as e:
         hold=closure_report(out,str(e)[:320]);print(json.dumps(hold,ensure_ascii=False));return 2
 if __name__=='__main__':raise SystemExit(main())
+
