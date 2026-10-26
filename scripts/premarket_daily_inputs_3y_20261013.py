@@ -28,8 +28,11 @@ def calendar_days(payloads):
             if not any(x in str(r[1]) for x in ('開始交易','最後交易')): closed.add(date_of(r[0]))
     return closed,years
 
-def resolve_calendar(payloads,target):
+def resolve_calendar(payloads,target,reviewed_closed=()):
     target=date_of(target); closed,years=calendar_days(payloads)
+    for day in reviewed_closed:
+        if day.year not in years:raise InputError("REVIEWED_CLOSURE_YEAR_UNCOVERED")
+        closed.add(day)
     def isopen(d):
         if d.year not in years: raise InputError('CALENDAR_YEAR_UNCOVERED:'+str(d.year))
         return d.weekday()<5 and d not in closed
@@ -175,7 +178,15 @@ def get_json(url,path,attempt_limit=2):
         metadata['failure_metadata_save_error']=type(e).__name__+': '+str(e)
     return None,metadata
 
-def collect(out,target='auto',symbols=()):
+def chart_source_url(symbol,cutoff):
+    day=date_of(cutoff)
+    try:start=day.replace(year=day.year-3)
+    except ValueError:start=day.replace(year=day.year-3,day=28)
+    first=int(dt.datetime.combine(start,dt.time(),TZ).timestamp())
+    end=int(dt.datetime.combine(day+dt.timedelta(days=1),dt.time(),TZ).timestamp())
+    return f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&period1={first}&period2={end}&events=div%2Csplits&includeAdjustedClose=true'
+
+def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_root=None):
     out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True);started=stamp();records=[];validation=[]
     now=dt.datetime.now(TZ);requested=now.date() if target=='auto' else date_of(target)
     c,m=get_json(f'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear={requested.year-1911}',out/'calendar.json');records.append(m)
@@ -188,7 +199,12 @@ def collect(out,target='auto',symbols=()):
         year=requested.year+1 if requested.month==12 else requested.year-1
         extra,em=get_json(f'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear={year-1911}',out/f'calendar_{year}.json');records.append(em)
         if extra:calendar.append(extra)
-    dates=resolve_calendar(calendar,requested);cut=dates['price_cutoff'];prev=dates['previous_session'];end=dates['target_date'].replace('-','')
+    reviewed_closed=set();retained_context=None
+    if reviewed_context is not None:
+        from stock_verified_market_sessions_v1_20261026 import retain_context,verify_context
+        retained_context=retain_context(reviewed_context,reviewed_context_root,out)
+        reviewed_closed=verify_context(retained_context,out)
+    dates=resolve_calendar(calendar,requested,reviewed_closed);cut=dates['price_cutoff'];prev=dates['previous_session'];end=dates['target_date'].replace('-','')
     jobs=[]
     for d in [prev,cut]:
         jobs += [(f'TWSE_{d}.json',f'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={d}&type=ALLBUT0999&response=json'),(f'TPEX_{d}.json',f'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={d[:4]}%2F{d[4:6]}%2F{d[6:]}&id=&response=json')]
@@ -221,7 +237,7 @@ def collect(out,target='auto',symbols=()):
         except Exception as e:validation.append({'source':name,'status':'FAIL','error':str(e)})
     for symbol in symbols:
         if not re.fullmatch(r'[A-Z0-9]{4,8}\.(TW|TWO)',symbol):raise InputError('INVALID_SYMBOL:'+symbol)
-    jobs=[(f'chart_{s}.json',f'https://query1.finance.yahoo.com/v8/finance/chart/{s}?interval=1d&range=3y&events=div%2Csplits&includeAdjustedClose=true') for s in symbols]
+    jobs=[(f'chart_{s}.json',chart_source_url(s,cut)) for s in symbols]
     charts=[]
     with cf.ThreadPoolExecutor(max_workers=3) as pool:
         for name,(p,m) in pool.map(fetchjob,jobs):
@@ -229,6 +245,7 @@ def collect(out,target='auto',symbols=()):
             try:charts.append(validate_chart(p,s,[prev,cut],{d:quotes.get((market,d),{}).get(code) for d in (prev,cut)}))
             except Exception as e:charts.append({'symbol':s,'status':'FAIL','error':str(e),'formal_input_qualified':False})
     result={'started_at':started,'completed_at':stamp(),'dates':dates,'sources':records,'official_validation':validation,'charts':charts,'transport_complete':all(r['status']=='FETCHED' for r in records),'official_validation_pass':all(v['status']=='PASS' for v in validation),'formal_input_qualified':False,'prediction_generated':False,'portfolio_data_collected':False,'remaining_requirements':['Complete qualified corporate-action coverage, including reductions/splits and target-day effects','Original gate and exact model-input continuity check','Same-run report, two-provider save/readback and actual scheduled delivery']}
+    if retained_context is not None:result['reviewed_market_context']=retained_context
     dump(out/'acquisition_receipt.json',result);return result
 
 def main():
@@ -238,3 +255,4 @@ def main():
     except Exception as e:
         r={'completed_at':stamp(),'status':'INPUT_ACQUISITION_FAILED','error':str(e),'formal_input_qualified':False,'prediction_generated':False};dump(pathlib.Path(a.out)/'acquisition_receipt.json',r);print(json.dumps(r,ensure_ascii=False));return 2
 if __name__=='__main__':raise SystemExit(main())
+
