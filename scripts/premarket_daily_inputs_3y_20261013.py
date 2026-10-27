@@ -189,7 +189,7 @@ def chart_source_url(symbol,cutoff):
 def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_root=None):
     out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True);started=stamp();records=[];validation=[]
     now=dt.datetime.now(TZ);requested=now.date() if target=='auto' else date_of(target)
-    c,m=get_json(f'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear={requested.year-1911}',out/'calendar.json');records.append(m)
+    c,m=get_json(f'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear={requested.year-1911}',out/'calendar.json');records.append(m)
     if c is None:raise InputError('CALENDAR_FETCH_FAILED')
     if target=='auto':
         closed,years=calendar_days([c])
@@ -197,7 +197,7 @@ def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_
     calendar=[c]
     if requested.month in (1,12):
         year=requested.year+1 if requested.month==12 else requested.year-1
-        extra,em=get_json(f'https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear={year-1911}',out/f'calendar_{year}.json');records.append(em)
+        extra,em=get_json(f'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear={year-1911}',out/f'calendar_{year}.json');records.append(em)
         if extra:calendar.append(extra)
     reviewed_closed=set();retained_context=None
     if reviewed_context is not None:
