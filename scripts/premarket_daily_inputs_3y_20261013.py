@@ -208,7 +208,7 @@ def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_
     jobs=[]
     for d in [prev,cut]:
         jobs += [(f'TWSE_{d}.json',f'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={d}&type=ALLBUT0999&response=json'),(f'TPEX_{d}.json',f'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={d[:4]}%2F{d[4:6]}%2F{d[6:]}&id=&response=json')]
-    jobs += [('index_raw.json',f'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={cut}&response=json'),('ohlc_raw.json',f'https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?date={cut}&response=json'),('actions_exdiv.json',f'https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate={prev}&endDate={end}'),('tpex_exdiv.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={prev[:4]}%2F{prev[4:6]}%2F{prev[6:]}&endDate={end[:4]}%2F{end[4:6]}%2F{end[6:]}&response=json')]
+    jobs += [('index_raw.json',f'https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={cut}&response=json'),('ohlc_raw.json',f'https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date={cut}&response=json'),('actions_exdiv.json',f'https://www.twse.com.tw/exchangeReport/TWT49U?response=json&startDate={prev}&endDate={end}'),('tpex_exdiv.json',f'https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={prev[:4]}%2F{prev[4:6]}%2F{prev[6:]}&endDate={end[:4]}%2F{end[4:6]}%2F{end[6:]}&response=json')]
     def fetchjob(j):return j[0],get_json(j[1],out/j[0])
     payload={}
     with cf.ThreadPoolExecutor(max_workers=3) as pool:
