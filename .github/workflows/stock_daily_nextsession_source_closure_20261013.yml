@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+      - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
   workflow_dispatch:
   schedule:
