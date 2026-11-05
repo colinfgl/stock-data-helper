@@ -41,7 +41,7 @@ def runtime_day_gate(now: dt.datetime):
     check(now.tzinfo is not None,'NAIVE_CLOCK_HOLD')
     z=now.astimezone(TZ)
     clock=z.time()
-    if dt.time(19,0)<=clock:
+    if dt.time(17,30)<=clock:
         return z.date()
     if clock<dt.time(8,9,30):
         return z.date()-dt.timedelta(days=1)
@@ -292,14 +292,14 @@ def selftest():
     hold('reject_1026_exchange_holiday',lambda:next_session(dt.date(2026,10,26),close,years))
     hold('reject_unknown_calendar_year',lambda:next_session(dt.date(2027,1,4),close,years))
     tests['tw_tz_source']='PASS' if str(TZ)=='Asia/Taipei' else 'FAIL'
-    tests['after_close_2045']='PASS' if runtime_day_gate(dt.datetime(2026,10,13,20,45,tzinfo=TZ))==base else 'FAIL'
+    tests['after_close_1730']='PASS' if runtime_day_gate(dt.datetime(2026,10,13,17,30,tzinfo=TZ))==base else 'FAIL'
     hold('reject_before_close',lambda:runtime_day_gate(dt.datetime(2026,10,13,12,30,tzinfo=TZ)))
     tests['after_midnight_0010_maps_prior_day']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,0,10,tzinfo=TZ))==base else 'FAIL'
     tests['overnight_real_0138_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,1,38,tzinfo=TZ))==base else 'FAIL'
     tests['morning_080929_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,8,9,29,tzinfo=TZ))==base else 'FAIL'
     tests['midnight_0000_maps_1013']='PASS' if runtime_day_gate(dt.datetime(2026,10,14,0,0,tzinfo=TZ))==base else 'FAIL'
     hold('reject_at_exact_080930_cutoff',lambda:runtime_day_gate(dt.datetime(2026,10,14,8,9,30,tzinfo=TZ)))
-    hold('reject_185959_before_close',lambda:runtime_day_gate(dt.datetime(2026,10,13,18,59,59,tzinfo=TZ)))
+    hold('reject_172959_before_first_source',lambda:runtime_day_gate(dt.datetime(2026,10,13,17,29,59,tzinfo=TZ)))
     hold('reject_naive_clock',lambda:runtime_day_gate(dt.datetime(2026,10,13,20,45)))
     tests['source_sha64']='PASS' if re.fullmatch('[a-f0-9]{64}',sha(b'one')) else 'FAIL'
     tests['both_per_symbol_and_official_sha_required']='PASS' if any('SOURCE_INDEPENDENT_RAW_SHA_MISMATCH' in str(t) for t in build_h9_package.__code__.co_consts) else 'FAIL'
