@@ -251,6 +251,59 @@ jobs:
           path: fixture/verified/
           retention-days: 30
           if-no-files-found: warn
+  # One-time genuine-source replay of earlier 68-good vs later 68-NULL.
+  # PR QA only; no new natural execution, orders or formal source promotion.
+  20261105-same-date-vintage-replay:
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/stock-vintage-source-reuse-20261105'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch earlier 68-valid original
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-41861327137
+          repository: colinfgl/stock-data-helper
+          run-id: 41861327137
+          github-token: ${{ github.token }}
+          path: fixture/earlier
+      - name: Fetch later 68-NULL original without replacing earlier bytes
+        uses: actions/download-artifact@v4
+        with:
+          name: stock-next-session-68-source-raw-41902913787
+          repository: colinfgl/stock-data-helper
+          run-id: 41902913787
+          github-token: ${{ github.token }}
+          path: fixture/current
+      - name: Verify 68 earlier originals after cross-checking current official bytes
+        run: |
+          python scripts/stock_same_date_vintage_recover_v1_20261105.py \
+            --current-raw fixture/current/stock_next_session_original_source_raw \
+            --earlier-raw fixture/earlier/stock_next_session_original_source_raw \
+            --earlier-run-id 41861327137 --output fixture/reverified
+          python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('fixture/reverified/research_only')
+          r=json.loads((p/'same_date_recovery_receipt.json').read_bytes())
+          i=json.loads((p/'model_input/h9_source_index.json').read_bytes())
+          assert r['Status']=='VERIFIED_EARLIER_SAME_DATE_RESEARCH_SOURCE_ONLY'
+          assert r['TargetDate']=='2026-11-05' and r['SourceDate']=='2026-11-04'
+          assert r['ReverifiedRawSymbols']==len(i['rows'])==68
+          assert r['FormalEligible'] is False and r['NaturalCredit']==r['OOSCredit']==0
+          assert r['UnmodifiedEarlierOriginal'] and r['UnmodifiedCurrentOriginal']
+          print('TRUE_ORIGINAL_68_VINTAGE_REPLAY_RESEARCH_ONLY_PASS')
+          PY
+      - name: Preserve genuine replay receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-20261105-same-day-original-replay-${{ github.run_id }}
+          path: fixture/reverified/
+          retention-days: 30
+          if-no-files-found: warn
   source-recovery-decision:
     if: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
