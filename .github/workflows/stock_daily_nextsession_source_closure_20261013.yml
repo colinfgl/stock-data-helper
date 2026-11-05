@@ -253,7 +253,7 @@ jobs:
           if-no-files-found: warn
   # One-time genuine-source replay of earlier 68-good vs later 68-NULL.
   # PR QA only; no new natural execution, orders or formal source promotion.
-  20261105-same-date-vintage-replay:
+  genuine_vintage_replay_20261105:
     if: github.event_name == 'pull_request' && github.head_ref == 'fix/stock-vintage-source-reuse-20261105'
     runs-on: ubuntu-latest
     timeout-minutes: 12
