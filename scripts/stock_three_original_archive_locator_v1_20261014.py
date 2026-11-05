@@ -64,9 +64,9 @@ def selection(receipt,artifacts,current_run_id):
         return {"Status":"HOLD_BAD_SOURCE_META","Reason":str(e)[:130],
                 "FormalEligible":False,"NaturalCredit":0,"OOSCredit":0}
     first=dt.datetime.combine(prior,dt.time(0),TZ)
-    end_prev=dt.datetime.combine(cur,dt.time(19),TZ)
+    end_prev=dt.datetime.combine(cur,dt.time(17,30),TZ)
     evening_start=end_prev
-    # Only independently archived captures from the PREVIOUS CALENDAR EVENING
+    # Only independently archived captures from the SAME completed market evening
     # are eligible for the second original. Post-midnight recovery runs may
     # repeat the same Yahoo NULLs as the current morning and are not a fresh
     # previous-evening parent, even when their artifact ZIP is authentic.
@@ -160,7 +160,7 @@ def selftest():
     test("no_prior_expired",lambda x,y:y[0].update(expired=True),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_evening_expired",lambda x,y:y[1].update(expired=True),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_prior_cross_day",lambda x,y:y[0].update(created_at="2026-10-13T19:10:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
-    test("no_evening_outside",lambda x,y:y[1].update(created_at="2026-10-13T18:59:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
+    test("no_evening_outside",lambda x,y:y[1].update(created_at="2026-10-13T17:29:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_future_archive",lambda x,y:y[1].update(created_at="2026-10-14T07:30:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("reject_following_morning_as_previous_evening",lambda x,y:y[1].update(created_at="2026-10-14T01:37:00+08:00"),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
     test("no_artifact_wrong_run",lambda x,y:y[0]["workflow_run"].update(id=2),"ARCHIVED_SOURCE_CANDIDATES_MISSING_RESEARCH_HOLD")
@@ -206,13 +206,17 @@ def main():
     if o.read_bytes()!=raw.encode():
         raise RuntimeError("ARCHIVE_CANDIDATE_RECEIPT_READBACK_FAILED")
     github_out=os.environ.get("GITHUB_OUTPUT")
+    if github_out and result.get("EveningRunID") and result.get("EveningArtifact"):
+        # Metadata CANDIDATE only, not raw-source validation. Independent
+        # verifier must fetch original and recheck 68/date/official SHAs.
+        with open(github_out,"a",encoding="utf8") as f:
+            f.write("evening_run_id="+result["EveningRunID"]+"\n")
+            f.write("evening_name="+result["EveningArtifact"]+"\n")
+            f.write("current_day8="+result["CurrentSession"]+"\n")
     if github_out and result["Status"]=="ARTIFACT_METADATA_CANDIDATES_ONLY_NOT_SOURCE_QUALIFIED":
         with open(github_out,"a",encoding="utf8") as f:
             f.write("prior_run_id="+result["PriorPublicInputRunID"]+"\n")
             f.write("prior_name="+result["PriorPublicInputArtifact"]+"\n")
-            f.write("evening_run_id="+result["EveningRunID"]+"\n")
-            f.write("evening_name="+result["EveningArtifact"]+"\n")
-            f.write("current_day8="+result["CurrentSession"]+"\n")
     print(json.dumps(result,ensure_ascii=False))
     return 0  # no archive is a truthful research HOLD; don't block core raw collection
 
