@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conditional recovery for ONE existing 20:45 source workflow.
+"""Conditional recovery for ONE existing 17:30 source workflow.
 
 Checks the completed, existing public-market-daily scheduled workflow and
 GitHub's real schedule-run receipts. Never invents a normal source trigger.
@@ -37,7 +37,7 @@ def utc_time(value):
 
 
 def source_session_date(now):
-    """A 20:45 evening source becomes next morning's preopen basis.
+    """A 17:30 evening source becomes next morning's preopen basis.
 
     Same local day after market close, or previous day before local noon;
     a false skip may only cost a bounded redundant research collection.
@@ -65,8 +65,8 @@ def decide(event, records, now, repository, current_run_id=None):
         return {"should_collect": False, "reason": "HOLD_STALE_OR_FUTURE_PARENT_RECEIPT", "research_only": True}
     require(isinstance(records, list), "SCHEDULE_RUN_INDEX_NOT_LIST")
     session = source_session_date(now)
-    cutoff = dt.datetime.combine(session, dt.time(20, 45), tzinfo=TZ).astimezone(dt.timezone.utc)
-    # Do not compete with the unique 20:45 cron. A parent that finishes early
+    cutoff = dt.datetime.combine(session, dt.time(17, 30), tzinfo=TZ).astimezone(dt.timezone.utc)
+    # Do not compete with the unique 17:30 cron. A parent that finishes early
     # is not evidence the primary source schedule has been missed.
     if nowutc < cutoff + dt.timedelta(minutes=10):
         return {"should_collect": False, "reason": "HOLD_BEFORE_PRIMARY_SOURCE_GRACE_WINDOW",
@@ -157,7 +157,7 @@ def fetch_runs(repo, token):
     # recovery runs; do not let a no-op run suppress future genuine recovery.
     now = dt.datetime.now(dt.timezone.utc)
     session = source_session_date(now)
-    cutoff = dt.datetime.combine(session, dt.time(20, 45), tzinfo=TZ).astimezone(dt.timezone.utc)
+    cutoff = dt.datetime.combine(session, dt.time(17, 30), tzinfo=TZ).astimezone(dt.timezone.utc)
     candidates = [x for x in rows if isinstance(x, dict) and x.get("event") == "workflow_run"
                   and x.get("head_branch") == "main" and x.get("status") == "completed"
                   and x.get("conclusion") == "success" and
@@ -211,10 +211,10 @@ def selftest():
     test("parent_wrong_name_rejected", lambda: p(e={**parent, "workflow_run":{**parent["workflow_run"],"name":"unrelated"}})["should_collect"] is False)
     test("missing_parent_rejected", lambda: p(e={})["reason"] == "HOLD_NO_COMPLETED_PARENT")
     test("stale_parent_rejected", lambda: p(e={**parent, "workflow_run":{**parent["workflow_run"],"updated_at":"2026-10-12T18:00:00Z"}})["should_collect"] is False)
-    test("early_parent_does_not_compete_with_primary", lambda: p(at=dt.datetime(2026,10,13,18,20,tzinfo=TZ),
-        e={**parent, "workflow_run":{**parent["workflow_run"],"updated_at":"2026-10-13T10:20:00Z"}})["reason"] == "HOLD_BEFORE_PRIMARY_SOURCE_GRACE_WINDOW")
-    test("after_grace_parent_allows_recovery",lambda: p(at=dt.datetime(2026,10,13,21,10,tzinfo=TZ),
-        e={**parent, "workflow_run":{**parent["workflow_run"],"updated_at":"2026-10-13T13:10:00Z"}})["should_collect"] is True)
+    test("early_parent_does_not_compete_with_primary", lambda: p(at=dt.datetime(2026,10,13,17,20,tzinfo=TZ),
+        e={**parent, "workflow_run":{**parent["workflow_run"],"updated_at":"2026-10-13T09:20:00Z"}})["reason"] == "HOLD_BEFORE_PRIMARY_SOURCE_GRACE_WINDOW")
+    test("after_grace_parent_allows_recovery",lambda: p(at=dt.datetime(2026,10,13,18,45,tzinfo=TZ),
+        e={**parent, "workflow_run":{**parent["workflow_run"],"updated_at":"2026-10-13T10:45:00Z"}})["should_collect"] is True)
     test("recovery_is_never_formal", lambda: p()["NaturalCredit"] == p()["OOSCredit"] == 0 and p()["FormalEligible"] is False)
     test("session_rollover_no_yesterday_confusion", lambda: str(source_session_date(now)) == "2026-10-13")
     def invalid_date_is_rejected():
