@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
+      - 'scripts/stock_same_date_vintage_recover_v1_20261105.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
   workflow_dispatch:
   schedule:
@@ -17,6 +18,7 @@ on:
     paths:
       - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
+      - 'scripts/stock_same_date_vintage_recover_v1_20261105.py'
       - 'scripts/stock_verified_market_sessions_v1_20261026.py'
       - 'scripts/stock_dividend_factor_reconciliation_v1_20261013.py'
       - 'scripts/stock_partial_source_fallback_v1_20261013.py'
@@ -48,7 +50,7 @@ jobs:
       - name: Compile and run source-window/date/quote-hash fail-closed self-tests
         run: |
           mkdir -p source_gate_qa
-          python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py scripts/stock_verified_market_sessions_v1_20261026.py
+          python -m py_compile scripts/stock_daily_prior_close_source_closure_v1_20261013.py scripts/stock_verified_market_sessions_v1_20261026.py scripts/stock_same_date_vintage_recover_v1_20261105.py
           python scripts/stock_daily_prior_close_source_closure_v1_20261013.py --self-test | tee source_gate_qa/55_tests.json
           python - <<'PY'
           import json
@@ -596,6 +598,30 @@ jobs:
           run-id: ${{ steps.generic_archive.outputs.evening_run_id }}
           github-token: ${{ github.token }}
           path: stock_evening_source_dynamic
+      - name: Validate earlier same-day original 68 when newer adjusted bars turn NULL
+        if: always()
+        continue-on-error: true
+        env:
+          ARCHIVED_SOURCE_RUN: ${{ steps.generic_archive.outputs.evening_run_id }}
+        run: |
+          current='stock_next_session_original_source_raw'
+          earlier='stock_evening_source_dynamic/stock_next_session_original_source_raw'
+          if [ ! -f stock_next_session_original_source/model_input/source_closure_readback.json ] && [ -n "$ARCHIVED_SOURCE_RUN" ] && [ -f "$earlier/acquisition_receipt.json" ]; then
+            python scripts/stock_same_date_vintage_recover_v1_20261105.py \
+              --current-raw "$current" --earlier-raw "$earlier" \
+              --earlier-run-id "$ARCHIVED_SOURCE_RUN" \
+              --output stock_next_session_original_source/vintage_recovered
+            echo '68/68 earlier SAME-CUTOFF original rechecked separately; current Yahoo NULL data not overwritten; RESEARCH_ONLY' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Render independently verified earlier-vintage partial without modifying the current raw
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -f stock_next_session_original_source/vintage_recovered/research_only/same_date_recovery_receipt.json ]; then
+            python scripts/stock_partial_source_fallback_v1_20261013.py \
+              --raw-dir stock_evening_source_dynamic/stock_next_session_original_source_raw \
+              --output stock_next_session_original_source/verified_vintage_partial
+          fi
       - name: Verify date-generic three-original 68 symbols from independent receipt SHAs
         if: always()
         continue-on-error: true
@@ -625,8 +651,11 @@ jobs:
           if [ ! -f "$triple" ]; then
             triple=stock_next_session_original_source/three_original_research/three_original_research_68.json
           fi
+          partial=stock_next_session_original_source/verified_partial/per_symbol_fallback.json
+          verified_archive=stock_next_session_original_source/verified_vintage_partial/per_symbol_fallback.json
+          if [ -f "$verified_archive" ]; then partial="$verified_archive"; fi
           python scripts/stock_source_report_continuity_v1_20261014.py \
-            --partial stock_next_session_original_source/verified_partial/per_symbol_fallback.json \
+            --partial "$partial" \
             --triple "$triple" \
             --out stock_next_session_original_source/report_continuity \
             --trigger "$RUN_TRIGGER_EVENT"
@@ -653,6 +682,25 @@ jobs:
           import json,pathlib,sys
           p=pathlib.Path('stock_next_session_original_source/model_input/source_closure_readback.json')
           if not p.exists():
+              # An independently rechecked prior same-date original is RESEARCH only.
+              # Retain the failed current Yahoo capture and its per-symbol evidence.
+              root=pathlib.Path('stock_next_session_original_source/vintage_recovered/research_only')
+              receipt=root/'same_date_recovery_receipt.json'
+              candidate=root/'model_input/source_closure_readback.json'
+              ix=root/'model_input/h9_source_index.json'
+              if receipt.exists() and candidate.exists() and ix.exists():
+                  import hashlib,re
+                  a=json.loads(receipt.read_bytes());b=json.loads(candidate.read_bytes())
+                  assert a['Status']=='VERIFIED_EARLIER_SAME_DATE_RESEARCH_SOURCE_ONLY'
+                  assert a['ReverifiedRawSymbols']==b['ticker_count']==b['per_symbol_sha_count']==68
+                  assert a['TargetDate']==b['target_date'] and a['SourceDate']==b['source_date']
+                  assert a['ResearchBundleSHA256']==b['package_sha256']
+                  assert hashlib.sha256(ix.read_bytes()).hexdigest()==b['source_index_sha256']
+                  assert re.fullmatch(r'[0-9a-f]{64}',a['EarlierOriginalReceiptSHA256'])
+                  assert a['FormalEligible'] is False and a['NaturalCredit']==a['OOSCredit']==0
+                  assert b['formal_input_qualified'] is False and b['natural_credit']==b['oos_credit']==0
+                  print('SOURCE68_PRIOR_VINTAGE_RESEARCH_ONLY:',a['TargetDate'],a['EarlierGitHubRunID'])
+                  sys.exit(0)
               print('SOURCE68_NOT_READY: inspect uploaded per-symbol/hold files; never relabel old days')
               sys.exit(2)
           x=json.loads(p.read_bytes())
