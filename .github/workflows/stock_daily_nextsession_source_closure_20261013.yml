@@ -1,8 +1,12 @@
 name: stock-daily-nextsession-68-source-closure
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/stock_daily_nextsession_source_closure_20261013.yml'
+      - 'scripts/stock_source_trigger_guard_v2_20261013.py'
   workflow_dispatch:
   schedule:
-    - cron: '45 12 * * 1,2,3,4,5' # Semantically unchanged weekdays 20:45 Asia/Taipei; refresh scheduled workflow actor
+    - cron: '30 9 * * 1,2,3,4,5' # Weekdays 17:30 Asia/Taipei, after public-market-daily 17:17; source handoff before 19:00 SET
   workflow_run:
     workflows: [public-market-daily]
     types: [completed]
