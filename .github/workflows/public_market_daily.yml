@@ -293,6 +293,172 @@ jobs:
           if __name__ == '__main__':
               sys.exit(main())
           PYCODE
+      - name: Capture official TPEx three-institution original (research only)
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          REQUESTED_DATE: ${{ inputs.target_date }}
+        run: |
+          python3 - <<'PYCODE_TPEX'
+          """Public TPEx research originals only; no forecast, broker or formal receipt writes.
+          
+          This helper is embedded in the existing GitHub public-market-daily workflow.
+          It captures original bytes before validating dates, source and accounting identities.
+          """
+          import datetime as dt
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import time
+          import urllib.parse
+          import urllib.request
+          from zoneinfo import ZoneInfo
+          
+          
+          def main():
+              root = pathlib.Path('public-daily')
+              root.mkdir(parents=True, exist_ok=True)
+              selection_file = root / 'selection_manifest.json'
+              selection = json.loads(selection_file.read_text()) if selection_file.exists() else {}
+              requested = os.environ.get('REQUESTED_DATE', '').strip()
+              chosen = requested or selection.get('selected_data_date') or selection.get('partial_current_date')
+              if chosen:
+                  day = dt.date.fromisoformat(chosen)
+              else:
+                  now = dt.datetime.now(ZoneInfo('Asia/Taipei'))
+                  day = now.date() if now.time() >= dt.time(15, 30) else now.date() - dt.timedelta(days=1)
+                  while day.weekday() >= 5:
+                      day -= dt.timedelta(days=1)
+              if day > dt.datetime.now(ZoneInfo('Asia/Taipei')).date():
+                  raise ValueError('FUTURE_DATE_FORBIDDEN')
+          
+              wanted = {'3105', '3163', '3293', '3324', '3363', '3491', '3529',
+                        '3718', '4979', '5274', '5351', '6223', '6510', '8147'}
+              roc_date = f'{day.year-1911}/{day.month:02}/{day.day:02}'
+              params = urllib.parse.urlencode({'type': 'Daily', 'sect': 'EW',
+                                               'date': roc_date, 'id': '', 'response': 'json'})
+              url = 'https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?' + params
+              output = root / day.isoformat()
+              output.mkdir(parents=True, exist_ok=True)
+          
+              attempt_log = []
+              found_rows = []
+              for i in range(1, 4):
+                  attempt = {'attempt': i, 'retrieved_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                             'url': url, 'status': 'SOURCE_HOLD'}
+                  try:
+                      req = urllib.request.Request(url, headers={
+                          'User-Agent': 'Mozilla/5.0 (stock-research-source/1.0)',
+                          'Accept': 'application/json',
+                      })
+                      with urllib.request.urlopen(req, timeout=25) as response:
+                          raw = response.read(10_000_001)
+                          attempt['http_status'] = response.status
+                          attempt['final_url'] = response.geturl()
+                      if len(raw) > 10_000_000:
+                          raise ValueError('RAW_RESPONSE_TOO_LARGE')
+                      filename = f'tpex_3insti.attempt{i}.json'
+                      (output / filename).write_bytes(raw)
+                      attempt.update(file=filename, size_bytes=len(raw),
+                                     sha256=hashlib.sha256(raw).hexdigest())
+                      if urllib.parse.urlparse(attempt['final_url']).hostname != 'www.tpex.org.tw':
+                          raise ValueError('REDIRECTED_OFF_ORIGIN')
+                      if attempt['http_status'] != 200:
+                          raise ValueError('NOT_HTTP_200')
+          
+                      def strict_pairs(pairs):
+                          obj = {}
+                          for key, value in pairs:
+                              if key in obj:
+                                  raise ValueError('DUPLICATE_JSON_KEY:' + key)
+                              obj[key] = value
+                          return obj
+          
+                      doc = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=strict_pairs,
+                                       parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
+                      if not isinstance(doc, dict) or str(doc.get('stat', 'ok')).lower() != 'ok':
+                          raise ValueError('JSON_NOT_VALID_OK_OBJECT')
+                      date_values = [str(doc.get(key, '')) for key in
+                                     ('date', 'reportDate', 'report_date', 'title')]
+                      acceptable_dates = {f'{day.year}{day.month:02}{day.day:02}',
+                                          f'{day.year}/{day.month:02}/{day.day:02}',
+                                          roc_date, f'{day.year-1911}年{day.month:02}月{day.day:02}日'}
+                      if not any(token in value for token in acceptable_dates for value in date_values):
+                          raise ValueError('SOURCE_DATE_NOT_VERIFIED')
+          
+                      tables = doc.get('tables', [])
+                      if not isinstance(tables, list):
+                          raise ValueError('TABLES_NOT_LIST')
+                      if isinstance(doc.get('data'), list):
+                          tables = tables + [{'data': doc['data'], 'fields': doc.get('fields', [])}]
+                      found = {}
+                      for table in tables:
+                          if not isinstance(table, dict) or not isinstance(table.get('data'), list):
+                              continue
+                          for row in table['data']:
+                              if not isinstance(row, list) or len(row) != 24:
+                                  continue
+                              code = str(row[0]).strip()
+                              if code not in wanted:
+                                  continue
+                              if code in found:
+                                  raise ValueError('DUPLICATE_SYMBOL:' + code)
+          
+                              def num(column):
+                                  val = str(row[column]).strip().replace(',', '')
+                                  if not re.fullmatch(r'[+-]?[0-9]+', val):
+                                      raise ValueError(f'BAD_NUMBER:{code}:{column}')
+                                  return int(val)
+          
+                              for buy, sell, net in ((2, 3, 4), (5, 6, 7), (8, 9, 10),
+                                                     (11, 12, 13), (14, 15, 16), (17, 18, 19),
+                                                     (20, 21, 22)):
+                                  if num(buy) - num(sell) != num(net):
+                                      raise ValueError(f'BAD_TRIPLE:{code}:{net}')
+                              if num(16) + num(19) != num(22):
+                                  raise ValueError('DEALER_TOTAL_MISMATCH:' + code)
+                              if num(4) + num(13) + num(22) != num(23):
+                                  raise ValueError('THREE_INST_MISMATCH:' + code)
+                              found[code] = {
+                                  'code': code, 'name': str(row[1]), 'foreign_ex_dealer_shares': num(4),
+                                  'foreign_dealer_shares': num(7), 'foreign_total_shares': num(10),
+                                  'trust_shares': num(13), 'dealer_self_shares': num(16),
+                                  'dealer_hedge_shares': num(19), 'dealer_total_shares': num(22),
+                                  'three_total_shares': num(23),
+                              }
+                      if len(found) != 14:
+                          raise ValueError('INCOMPLETE_14_STOCKS:' + str(len(found)))
+                      found_rows = [found[t] for t in sorted(wanted)]
+                      attempt.update(status='SOURCE_VALIDATED_RESEARCH_ONLY', stock_count=len(found_rows),
+                                     accounting_identities='PASS')
+                  except Exception as error:
+                      attempt.update(status='SOURCE_HOLD', error=f'{type(error).__name__}: {error}'[:300])
+                  attempt_log.append(attempt)
+                  if found_rows:
+                      break
+                  time.sleep(2)
+          
+              manifest = {
+                  'schema': 'PUBLIC_TPEX_3INSTI_CAPTURE_V1', 'trading_date': day.isoformat(),
+                  'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                  'github_run_id': os.environ.get('GITHUB_RUN_ID'), 'source_url': url,
+                  'status': 'RESEARCH_SOURCE_READY' if found_rows else 'SOURCE_HOLD',
+                  'scope': 'PUBLIC_ONLY_NO_FORECAST_NO_FORMAL_RECEIPT_NO_TRADE',
+                  'attempts': attempt_log, 'stocks': found_rows,
+              }
+              (output / 'tpex_3insti_manifest.json').write_text(
+                  json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+              print(json.dumps({'trading_date': day.isoformat(), 'status': manifest['status'],
+                                'stock_count': len(found_rows), 'attempts': len(attempt_log)},
+                               ensure_ascii=False))
+          
+          
+          if __name__ == '__main__':
+              main()
+          PYCODE_TPEX
       - name: Preserve originals, validation and failures
         if: always()
         uses: actions/upload-artifact@v4
