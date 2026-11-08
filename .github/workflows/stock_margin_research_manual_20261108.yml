@@ -1,0 +1,42 @@
+name: stock-margin-research-manual-20261108
+
+# An explicitly manual, isolated research collector. Never updates production
+# forecasts, settlement, signed controls, position files, or recurring tasks.
+on:
+  workflow_dispatch:
+    inputs:
+      trade_date:
+        description: 'TWSE trading date (YYYY-MM-DD)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the source parser without network access
+        run: python -m unittest discover -s tests -p 'test_stock_margin_twse_ingest_20261108_v1.py' -v
+      - name: Fetch and validate exactly one TWSE official date
+        env:
+          TRADE_DATE: ${{ inputs.trade_date }}
+        run: |
+          mkdir -p research_out
+          python scripts/stock_margin_twse_ingest_20261108_v1.py \
+            --date "$TRADE_DATE" --fetch \
+            --archive-raw research_out/twse_margin_raw.json \
+            --out research_out/twse_margin_research_only.json
+      - name: Attach raw evidence and validated research report
+        uses: actions/upload-artifact@v4
+        with:
+          name: twse-margin-research-${{ inputs.trade_date }}
+          path: research_out/
+          if-no-files-found: error
+          retention-days: 30
