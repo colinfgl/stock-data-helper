@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backfill official PIT daily sequences for R146 Shadow Model.
+"""Backfill ex-post official daily research sequences for R146 Shadow Model.
 
 Sources
 - TAIEX: TWSE MI_5MINS_HIST monthly endpoint.
@@ -15,8 +15,9 @@ Targets
 
 Coverage
 - 2024-01-01 through 2026-09-24 inclusive.
-- Data is after-close official daily data. For a premarket prediction on trade_date,
-  only rows with date < trade_date are PIT-eligible.
+- Historical endpoints expose a trading date, not their original publication time.
+  For premarket PIT, source date < forecast date is necessary but not enough;
+  an independent same-vintage snapshot and first-observed timestamp are required.
 
 Outputs
 - output/r146_shadow/taiex_daily.csv
@@ -157,8 +158,8 @@ def fetch_taiex() -> List[dict]:
                 "amount": "",
                 "source": "TWSE MI_5MINS_HIST",
                 "source_url": src,
-                "available_from": ds + " 14:00 Asia/Taipei",
-                "pit_use_rule": "premarket trade_date may only use row.date < trade_date",
+                "available_from": "UNVERIFIED_HISTORICAL_PUBLICATION_TIME",
+                "pit_use_rule": "RESEARCH_ONLY; premarket requires source_date < forecast_date AND independently evidenced first_seen_at <= decision_at",
             })
         print(f"TAIEX {year}-{month:02d}: cumulative={len(rows)}", flush=True)
         time.sleep(0.18)
@@ -219,8 +220,8 @@ def fetch_stock(code: str, name: str) -> List[dict]:
                 "amount": fnum(r[ai]),
                 "source": "TWSE STOCK_DAY",
                 "source_url": url,
-                "available_from": ds + " 14:00 Asia/Taipei",
-                "pit_use_rule": "premarket trade_date may only use row.date < trade_date",
+                "available_from": "UNVERIFIED_HISTORICAL_PUBLICATION_TIME",
+                "pit_use_rule": "RESEARCH_ONLY; premarket requires source_date < forecast_date AND independently evidenced first_seen_at <= decision_at",
             })
         print(f"{code} {year}-{month:02d}: cumulative={len(rows)}", flush=True)
         time.sleep(0.18)
@@ -289,8 +290,11 @@ def main():
         "status": "PASS" if all(x["sequence_60_ready"] for x in cov) else "PARTIAL",
         "wf_status": "READY" if all(x["wf_first_fold_ready"] for x in cov) else "INSUFFICIENT_RAW_HISTORY",
         "range": {"start": START_DATE, "end": MAX_DATE},
-        "source_policy": "official TWSE after-close; premarket uses date < trade_date",
+        "source_policy": "TWSE historical ex-post dates only; original publication/vintage timestamps unverified; research-only",
         "formal_weight": 0,
+        "formal_pit_eligible": False,
+        "publication_time_verified": False,
+        "status_scope": "RAW_HISTORY_COVERAGE_ONLY",
         "production_effect": "NONE",
         "coverage": cov,
     }
