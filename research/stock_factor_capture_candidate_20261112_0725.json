@@ -1,0 +1,27 @@
+{
+  "report_id": "STOCK_FACTOR_CAPTURE_CANDIDATE_20261112_0725",
+  "role": "PREMARKET_0810",
+  "decision_at": "2026-11-12T08:10:00+08:00",
+  "scope": "RESEARCH_ONLY; NO_FORMAL_OR_NATURAL_CREDIT",
+  "snapshots": [
+    {
+      "source": "TWSE_MI_MARGN",
+      "market": "TWSE",
+      "kind": "MARGIN",
+      "version": "TODAY_BALANCE_PROVISIONAL",
+      "trade_date": "2026-11-11",
+      "observed_at": "2026-11-12T07:25:00+08:00",
+      "raw_sha256": null,
+      "published_at": null
+    }
+  ],
+  "research_only_additional_observation": {
+    "source": "TWSE_BFI82U_WEB",
+    "trade_date": "2026-11-11",
+    "observed_at": "2026-11-12T07:25:00+08:00",
+    "gate_source_registered": false,
+    "raw_sha256": null,
+    "url": "https://www.twse.com.tw/fund/BFI82U?response=html&type=day"
+  },
+  "must_not_use_as": "evidence that sealed 08:10 model has incorporated these features; official PIT or OOS"
+}
