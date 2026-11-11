@@ -1,0 +1,26 @@
+{
+  "role": "PREMARKET_0810",
+  "decision_at": "2026-11-12T08:10:00+08:00",
+  "snapshots": [
+    {
+      "source": "TWSE_T86_WEB",
+      "market": "TWSE",
+      "kind": "INSTITUTIONAL",
+      "version": "WEB_BLOCK_SCOPE_UNVERIFIED",
+      "trade_date": "2026-11-11",
+      "observed_at": "2026-11-11T20:02:42+08:00",
+      "raw_sha256": null,
+      "published_at": null
+    },
+    {
+      "source": "TWSE_MI_MARGN",
+      "market": "TWSE",
+      "kind": "MARGIN",
+      "version": "TODAY_BALANCE_PROVISIONAL",
+      "trade_date": "2026-11-10",
+      "observed_at": "2026-11-11T20:02:42+08:00",
+      "raw_sha256": null,
+      "published_at": null
+    }
+  ]
+}
