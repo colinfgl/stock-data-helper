@@ -10,7 +10,7 @@
       "kind": "MARGIN",
       "version": "TODAY_BALANCE_PROVISIONAL",
       "trade_date": "2026-11-11",
-      "observed_at": "2026-11-12T07:25:00+08:00",
+      "observed_at": "2026-11-11T23:27:25.874+00:00",
       "raw_sha256": null,
       "published_at": null
     }
@@ -18,10 +18,11 @@
   "research_only_additional_observation": {
     "source": "TWSE_BFI82U_WEB",
     "trade_date": "2026-11-11",
-    "observed_at": "2026-11-12T07:25:00+08:00",
+    "observed_at": "2026-11-11T23:27:25.874+00:00",
     "gate_source_registered": false,
     "raw_sha256": null,
     "url": "https://www.twse.com.tw/fund/BFI82U?response=html&type=day"
   },
-  "must_not_use_as": "evidence that sealed 08:10 model has incorporated these features; official PIT or OOS"
+  "must_not_use_as": "evidence that sealed 08:10 model has incorporated these features; official PIT or OOS",
+  "observation_semantics": "Observed_at is conservative UTC time captured AFTER successful refetch of official WEB VIEW (2026-11-12 07:27:25.874 Asia/Taipei); raw HTTP response bytes not obtained. Not the source's original publication timestamp."
 }
