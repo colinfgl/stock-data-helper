@@ -1,4 +1,4 @@
-name: R146 Shadow PIT Backfill
+name: R146 Shadow Historical Research Backfill (unverified PIT)
 
 on:
   workflow_dispatch:
@@ -18,13 +18,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Fetch official TWSE PIT history
+      - name: Verify historical publication-time guard
+        run: python -m unittest discover -s tests -p 'test_fetch_r146_shadow_vintage_20261111.py'
+
+      - name: Fetch TWSE historical research data (publication time unverified)
         run: python scripts/fetch_r146_shadow_pit.py
 
-      - name: Show coverage
+      - name: Show raw-history coverage (not PIT certification)
         run: cat output/r146_shadow/coverage.json
 
-      - name: Commit generated PIT data
+      - name: Commit research-only history outputs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -32,6 +35,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes"
           else
-            git commit -m "Update R146 official PIT shadow dataset"
+            git commit -m "Update R146 historical shadow research dataset (PIT unverified)"
             git push
           fi
