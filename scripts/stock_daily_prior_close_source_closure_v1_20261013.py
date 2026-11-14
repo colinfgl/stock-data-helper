@@ -382,13 +382,13 @@ def main():
     try:
         candidate=runtime_day_gate(dt.datetime.now(dt.timezone.utc))
         base=candidate
-        from premarket_daily_inputs_3y_20261013 import get_json,calendar_days,collect
+        from premarket_daily_inputs_3y_20261013 import get_verified_twse_annual_calendar,calendar_days,collect
         calendar_dir=out.parent/(out.name+'_calendar_source')
-        obj,fetch_meta=get_json('https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear='+str(base.year-1911),calendar_dir/'calendar.json')
+        obj,fetch_meta=get_verified_twse_annual_calendar(base.year,calendar_dir/'calendar.json',endpoint='plain')
         check(obj is not None,'OFFICIAL_CALENDAR_NOT_AVAILABLE')
         payloads=[obj]
         if base.month==12:
-            nxt,meta2=get_json('https://www.twse.com.tw/holidaySchedule/holidaySchedule?response=json&queryYear='+str(base.year+1-1911),calendar_dir/'nextyear.json')
+            nxt,meta2=get_verified_twse_annual_calendar(base.year+1,calendar_dir/'nextyear.json',endpoint='plain')
             check(nxt is not None,'NEXT_YEAR_OFFICIAL_CALENDAR_MISSING')
             payloads.append(nxt)
         closed,years=calendar_days(payloads)
