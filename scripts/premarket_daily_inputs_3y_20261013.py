@@ -28,6 +28,81 @@ def calendar_days(payloads):
             if not any(x in str(r[1]) for x in ('開始交易','最後交易')): closed.add(date_of(r[0]))
     return closed,years
 
+_TWSE_2026_ARCHIVE_SHA256 = '7fefe785ea7155a5004a2eb74486ad865ea5c4b5f02ee0cffbbdacb1ca2ea390'
+_TWSE_2026_ARCHIVE_ORIGINAL_URL = 'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear=115'
+_TWSE_2026_ARCHIVE_RETRIEVED_AT = '2026-11-11T17:19:52.758562+00:00'
+_TWSE_2026_ARCHIVE_ARTIFACT_ID = 13876227590
+
+def select_annual_calendar_payload(requested_year, live, archive_raw=None):
+    """Fail closed except for a SHA-pinned 2026 original after TWSE rolls to 2027."""
+    _, live_years = calendar_days([live])
+    if live_years == {requested_year}:
+        return live, False
+    if requested_year != 2026 or live_years != {2027}:
+        raise InputError('CALENDAR_REQUEST_YEAR_MISMATCH:requested=' + str(requested_year)
+                         + ':returned=' + ','.join(map(str, sorted(live_years))))
+    if archive_raw is None or sha(archive_raw) != _TWSE_2026_ARCHIVE_SHA256:
+        raise InputError('TWSE_2026_ARCHIVED_ORIGINAL_SHA_MISSING_OR_MISMATCH')
+    archived = json.loads(archive_raw)
+    _, archived_years = calendar_days([archived])
+    if archived_years != {requested_year}:
+        raise InputError('TWSE_2026_ARCHIVED_ORIGINAL_YEAR_MISMATCH')
+    return archived, True
+
+def get_verified_twse_annual_calendar(year, path, endpoint='rwd'):
+    """Save the actual selected original to path and preserve live rollover evidence."""
+    if endpoint not in ('rwd', 'plain'):
+        raise InputError('TWSE_CALENDAR_ENDPOINT_INVALID')
+    path = pathlib.Path(path)
+    url_prefix = ('https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule'
+                  if endpoint == 'rwd' else
+                  'https://www.twse.com.tw/holidaySchedule/holidaySchedule')
+    url = f'{url_prefix}?response=json&queryYear={year-1911}'
+    live_path = path.with_name(path.stem + '_live.json')
+    live, live_meta = get_json(url, live_path)
+    if live is None:
+        raise InputError('TWSE_ANNUAL_CALENDAR_LIVE_FETCH_FAILED')
+    _, live_years = calendar_days([live])
+    if year == 2026 and live_years == {2027}:
+        archive_dir = pathlib.Path(__file__).resolve().parent.parent / 'data' / 'twse_annual_calendars'
+        archive_raw = (archive_dir / '2026.json').read_bytes()
+        provenance = json.loads((archive_dir / '2026.provenance.json').read_text(encoding='utf-8'))
+        if (provenance.get('original_sha256') != _TWSE_2026_ARCHIVE_SHA256 or
+            provenance.get('original_bytes') != len(archive_raw) or
+            provenance.get('expected_calendar_year') != 2026 or
+            provenance.get('archival_source', {}).get('github_actions_artifact_id') !=
+                _TWSE_2026_ARCHIVE_ARTIFACT_ID):
+            raise InputError('TWSE_2026_ARCHIVED_PROVENANCE_MISMATCH')
+        selected, archived = select_annual_calendar_payload(year, live, archive_raw)
+    else:
+        selected, archived = select_annual_calendar_payload(year, live)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if archived:
+        path.write_bytes(archive_raw)
+        result = dict(live_meta)
+        result.update({
+            'url': _TWSE_2026_ARCHIVE_ORIGINAL_URL, 'path': path.name,
+            'sha256': _TWSE_2026_ARCHIVE_SHA256, 'bytes': len(archive_raw),
+            'retrieved_at': _TWSE_2026_ARCHIVE_RETRIEVED_AT,
+            'status': 'ARCHIVED_ORIGINAL_YEAR_ROLLOVER_VERIFIED',
+            'original_artifact_id': _TWSE_2026_ARCHIVE_ARTIFACT_ID,
+            'original_retrieved_at': _TWSE_2026_ARCHIVE_RETRIEVED_AT,
+            'original_raw_sha256_verified': True,
+            'live_requested_url': url,
+            'live_requested_year': year,
+            'live_response_years': sorted(live_years),
+            'live_response_sha256': live_meta['sha256'],
+            'live_response_path': live_path.name,
+            'rollover_checked_at': stamp(),
+            'formal_input_qualified': False,
+            'calendar_archive_only': True
+        })
+        return selected, result
+    path.write_bytes(live_path.read_bytes())
+    result = dict(live_meta)
+    result['path'] = path.name
+    return selected, result
+
 def resolve_calendar(payloads,target,reviewed_closed=()):
     target=date_of(target); closed,years=calendar_days(payloads)
     for day in reviewed_closed:
@@ -189,7 +264,7 @@ def chart_source_url(symbol,cutoff):
 def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_root=None):
     out=pathlib.Path(out);out.mkdir(parents=True,exist_ok=True);started=stamp();records=[];validation=[]
     now=dt.datetime.now(TZ);requested=now.date() if target=='auto' else date_of(target)
-    c,m=get_json(f'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear={requested.year-1911}',out/'calendar.json');records.append(m)
+    c,m=get_verified_twse_annual_calendar(requested.year,out/'calendar.json');records.append(m)
     if c is None:raise InputError('CALENDAR_FETCH_FAILED')
     if target=='auto':
         closed,years=calendar_days([c])
@@ -197,7 +272,7 @@ def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_
     calendar=[c]
     if requested.month in (1,12):
         year=requested.year+1 if requested.month==12 else requested.year-1
-        extra,em=get_json(f'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear={year-1911}',out/f'calendar_{year}.json');records.append(em)
+        extra,em=get_verified_twse_annual_calendar(year,out/f'calendar_{year}.json');records.append(em)
         if extra:calendar.append(extra)
     reviewed_closed=set();retained_context=None
     if reviewed_context is not None:
@@ -244,7 +319,7 @@ def collect(out,target='auto',symbols=(),reviewed_context=None,reviewed_context_
             records.append(m);s=name[6:-5];market='TPEX' if s.endswith('.TWO') else'TWSE';code=s.split('.')[0]
             try:charts.append(validate_chart(p,s,[prev,cut],{d:quotes.get((market,d),{}).get(code) for d in (prev,cut)}))
             except Exception as e:charts.append({'symbol':s,'status':'FAIL','error':str(e),'formal_input_qualified':False})
-    result={'started_at':started,'completed_at':stamp(),'dates':dates,'sources':records,'official_validation':validation,'charts':charts,'transport_complete':all(r['status']=='FETCHED' for r in records),'official_validation_pass':all(v['status']=='PASS' for v in validation),'formal_input_qualified':False,'prediction_generated':False,'portfolio_data_collected':False,'remaining_requirements':['Complete qualified corporate-action coverage, including reductions/splits and target-day effects','Original gate and exact model-input continuity check','Same-run report, two-provider save/readback and actual scheduled delivery']}
+    result={'started_at':started,'completed_at':stamp(),'dates':dates,'sources':records,'official_validation':validation,'charts':charts,'transport_complete':all(r['status'] in ('FETCHED','ARCHIVED_ORIGINAL_YEAR_ROLLOVER_VERIFIED') for r in records),'official_validation_pass':all(v['status']=='PASS' for v in validation),'formal_input_qualified':False,'prediction_generated':False,'portfolio_data_collected':False,'remaining_requirements':['Complete qualified corporate-action coverage, including reductions/splits and target-day effects','Original gate and exact model-input continuity check','Same-run report, two-provider save/readback and actual scheduled delivery']}
     if retained_context is not None:result['reviewed_market_context']=retained_context
     dump(out/'acquisition_receipt.json',result);return result
 

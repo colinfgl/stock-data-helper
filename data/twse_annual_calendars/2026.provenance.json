@@ -1,0 +1,20 @@
+{
+  "schema": "TWSE_2026_ANNUAL_CALENDAR_ARCHIVED_ORIGINAL_V1",
+  "qualification": "RESEARCH_ONLY_CALENDAR_INPUT_NOT_FORMAL_PREDICTION",
+  "original_url": "https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&queryYear=115",
+  "original_retrieved_at_utc": "2026-11-11T17:19:52.758562+00:00",
+  "original_sha256": "7fefe785ea7155a5004a2eb74486ad865ea5c4b5f02ee0cffbbdacb1ca2ea390",
+  "original_bytes": 2783,
+  "expected_calendar_year": 2026,
+  "original_payload_queryYear": 2026,
+  "archival_source": {
+    "repo": "colinfgl/stock-data-helper",
+    "github_actions_run_id": 43067044307,
+    "github_actions_artifact_id": 13876227590,
+    "artifact_name": "stock-next-session-68-source-raw-43067044307",
+    "artifact_internal_path": "stock_next_session_original_source_raw/calendar.json",
+    "receipt_internal_path": "stock_next_session_original_source_raw/acquisition_receipt.json"
+  },
+  "operational_rule": "Only when the live 2026 TWSE calendar request returns a valid next-year (2027) payload may the pinned SHA-256-verified 2026 original be used; preserve live bytes separately; fail closed for other year mismatches and errors.",
+  "disclaimer": "This archival calendar is not a market-price input, forecast, settlement record, or formal receipt. Emergency official closures still require separate date-specific evidence."
+}

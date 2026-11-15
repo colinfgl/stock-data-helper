@@ -6,6 +6,9 @@ on:
       - 'scripts/stock_daily_prior_close_source_closure_v1_20261013.py'
       - 'scripts/stock_same_date_vintage_recover_v1_20261105.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
+      - 'scripts/premarket_daily_inputs_3y_20261013.py'
+      - 'tests/test_twse_calendar_rollover_20261115.py'
+      - 'data/twse_annual_calendars/**'
   workflow_dispatch:
   schedule:
     - cron: '30 9 * * 1,2,3,4,5' # Weekdays 17:30 Asia/Taipei, after public-market-daily 17:17; source handoff before 19:00 SET
@@ -32,6 +35,8 @@ on:
       - 'scripts/stock_source_report_continuity_v1_20261014.py'
       - 'scripts/stock_taiex_14gap_research_v1_20261013.py'
       - 'scripts/stock_source_trigger_guard_v2_20261013.py'
+      - 'tests/test_twse_calendar_rollover_20261115.py'
+      - 'data/twse_annual_calendars/**'
 permissions:
   contents: read
   actions: read
@@ -57,6 +62,16 @@ jobs:
           x=json.load(open('source_gate_qa/55_tests.json'))
           assert x['status']=='PASS' and x['passed']==x['total']==55
           assert x['scope']=='PUBLIC_SYNTHETIC_TESTS_ONLY_NO_PRIVATE_SOURCE_NO_FORMAL'
+          PY
+      - name: Verify TWSE 2026 SHA-pinned calendar rollover and fail-closed guards
+        run: |
+          python -m py_compile scripts/premarket_daily_inputs_3y_20261013.py tests/test_twse_calendar_rollover_20261115.py
+          python tests/test_twse_calendar_rollover_20261115.py | tee source_gate_qa/twse2026_rollover_tests.json
+          python - <<'PY'
+          import json
+          x=json.load(open('source_gate_qa/twse2026_rollover_tests.json'))
+          assert x['status']=='PASS' and x['passed']==x['total']==9,x
+          assert x['scope']=='OFFLINE_SOURCE_ORIGINAL_REPLAY_NO_FORMAL_NO_NATURAL'
           PY
       - name: Validate optional dividend-factor research helper independently
         run: |
