@@ -7,6 +7,7 @@ on:
       - 'scripts/stock_settlement_native_receipt_bridge_20261018.py'
       - 'tests/test_stock_settlement_native_receipt_bridge_20261018.py'
       - 'tests/test_stock_settlement_native_receipt_bridge_integration_20261018.py'
+      - 'tests/test_stock_settlement_report_preserving_20261115.py'
       - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
       - 'tests/test_stock_settlement_successor_gate_20261018.py'
       - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
@@ -17,6 +18,7 @@ on:
       - 'scripts/stock_settlement_native_receipt_bridge_20261018.py'
       - 'tests/test_stock_settlement_native_receipt_bridge_20261018.py'
       - 'tests/test_stock_settlement_native_receipt_bridge_integration_20261018.py'
+      - 'tests/test_stock_settlement_report_preserving_20261115.py'
       - 'tests/test_stock_settlement_prompt_preflight_20261018.py'
       - '.github/workflows/stock-settlement-prompt-integrity-tests.yml'
   workflow_dispatch:
@@ -57,5 +59,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_stock_settlement_native_receipt_bridge_20261018.py' -v
       - name: Native receipt full offline integration
         run: python -m unittest discover -s tests -p 'test_stock_settlement_native_receipt_bridge_integration_20261018.py' -v
+      - name: Report-preserving native write failure and partial recovery
+        run: python -m unittest discover -s tests -p 'test_stock_settlement_report_preserving_20261115.py' -v
       - name: Twelve fail-closed regression scenarios
         run: python -m unittest discover -s tests -p 'test_stock_settlement_prompt_preflight_20261018.py' -v

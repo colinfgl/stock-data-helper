@@ -16,6 +16,59 @@ EXPECTED_TASK = "6a825a73808c81918c5c7b5d1fecaf28"
 RECEIPT = "STOCK_Delivery_Receipt"
 OBS = "STOCK_Delivery_Observability"
 
+# These are fixed, non-sensitive failure codes emitted by the settlement
+# bridge/gates. Arbitrary connector exception text must not be sent to users:
+# it may include spreadsheet IDs, tokens, URLs, or other private details.
+SAFE_HOLD_REASONS = frozenset({
+    "WRONG_SETTLEMENT_TASK",
+    "CONTEXT_TASK_ID_MISMATCH",
+    "WRONG_TASK_PROFILE",
+    "NOT_GENUINE_SCHEDULED_RUN",
+    "SOURCE_OR_REPORT_NOT_VERIFIED",
+    "OWNED_LIVE_LEASE_REQUIRED",
+    "AUTHORIZED_SHEETS_CLIENT_REQUIRED",
+    "DELIVERY_RECEIPT_SCHEMA_DRIFT",
+    "DELIVERY_OBSERVABILITY_SCHEMA_DRIFT",
+    "NATIVE_WRITE_PLAN_HOLD",
+    "INCOMPLETE_DUAL_TABLE_READBACK",
+    "TASK_RUN_IDENTITY_INVALID",
+    "NO_SAME_RUN_ORIGINAL_TRIGGER_CONTEXT",
+    "NO_SAME_RUN_ORIGINAL_REPORT_BYTES",
+    "ORIGINAL_REPORT_RAW_BYTES_MISSING",
+    "FROZEN_REPORT_SHA_MISMATCH",
+    "REPORT_BODY_RUN_DATE_MISMATCH",
+    "SAVE_READBACK_STATUS_EXPLICIT_REQUIRED",
+    "SAVE_PASS_WITHOUT_ARTIFACT",
+    "UNSAVED_CANNOT_BE_NATURAL",
+    "NATURAL_WITHOUT_FORMAL_FORBIDDEN",
+    "NATURAL_REQUIRES_INDEPENDENT_MORNING_AND_SAME_RUN_PROOF",
+    "TERMINAL_FINAL_STATUS_MISSING",
+    "UNSAVED_RESULT_MUST_HAVE_TRUTHFUL_TERMINAL_STATUS",
+    "CONFIG_ID_SHA_PARTIAL_INCONSISTENCY",
+    "MISSING_CONFIG_REQUIRES_EXPLICIT_FORMAL_NATURAL_FALSE",
+    "MISSING_CONFIG_NOT_EXPLICITLY_CLASSIFIED",
+    "BUNDLE_SHA_MISSING",
+    "PLATFORM_EVIDENCE_UNVERIFIED_DO_NOT_PROMOTE",
+    "RECEIPT_FIELD_COUNT_INVALID",
+    "PLAN_NOT_WRITEABLE",
+    "CROSS_TABLE_IDENTITY_MISMATCH",
+    "FROZEN_PLAN_IDENTITY_MISMATCH",
+    "UNVERIFIED_PLAN_AUTHORITY",
+    "PLAN_ALREADY_EXECUTED",
+    "STOCK_Delivery_Receipt_HEADER_DRIFT",
+    "STOCK_Delivery_Receipt_ROW_WIDTH_OVERFLOW",
+    "STOCK_Delivery_Receipt_DUPLICATE_KEY",
+    "STOCK_Delivery_Receipt_CONTENT_CONFLICT",
+    "STOCK_Delivery_Receipt_STALE_ACTION",
+    "STOCK_Delivery_Receipt_READBACK_MISSING",
+    "STOCK_Delivery_Observability_HEADER_DRIFT",
+    "STOCK_Delivery_Observability_ROW_WIDTH_OVERFLOW",
+    "STOCK_Delivery_Observability_DUPLICATE_KEY",
+    "STOCK_Delivery_Observability_CONTENT_CONFLICT",
+    "STOCK_Delivery_Observability_STALE_ACTION",
+    "STOCK_Delivery_Observability_READBACK_MISSING",
+})
+
 
 def execute_same_run(*, context, report_bytes, client, spreadsheet_id,
                      lease_token, lease_verified, worker_task_id,
@@ -62,3 +115,54 @@ def execute_same_run(*, context, report_bytes, client, spreadsheet_id,
             "native_receipts": readbacks,
             "platform_delivery_verified": False,
             "natural_credit_granted_by_bridge": False}
+
+
+def execute_report_preserving(*, context, report_bytes, client, spreadsheet_id,
+                              lease_token, lease_verified, worker_task_id,
+                              native_code_verified,
+                              original_report_readback_verified):
+    """Keep the original report available even if a native write fails.
+
+    The original worker must explicitly render/deliver ``report_bytes`` after
+    calling this adapter. Returning bytes is NOT platform delivery proof.
+    A failed dual write may have appended the first table already, so its
+    state is always UNVERIFIED_POSSIBLE_PARTIAL until a trusted readback.
+    This wrapper never grants formal, natural, or delivery credit and does not
+    weaken the fail-closed ``execute_same_run`` entry point.
+    """
+    if not isinstance(report_bytes, bytes) or not report_bytes:
+        return {
+            "status": "REPORT_UNAVAILABLE_NATIVE_WRITE_HOLD",
+            "report_bytes": report_bytes,
+            "reason_code": "ORIGINAL_REPORT_RAW_BYTES_MISSING",
+            "native_write_state": "NOT_ATTEMPTED",
+            "platform_delivery_verified": False,
+            "natural_credit_granted_by_bridge": False,
+        }
+    try:
+        result = execute_same_run(
+            context=context, report_bytes=report_bytes, client=client,
+            spreadsheet_id=spreadsheet_id, lease_token=lease_token,
+            lease_verified=lease_verified, worker_task_id=worker_task_id,
+            native_code_verified=native_code_verified,
+            original_report_readback_verified=original_report_readback_verified)
+    except Exception as exc:
+        code = str(exc)
+        if code not in SAFE_HOLD_REASONS:
+            code = "NATIVE_WRITE_UNVERIFIED_ERROR"
+        return {
+            "status": "REPORT_AVAILABLE_NATIVE_WRITE_HOLD",
+            "report_bytes": report_bytes,
+            "reason_code": code,
+            "native_write_state": "UNVERIFIED_POSSIBLE_PARTIAL",
+            "platform_delivery_verified": False,
+            "natural_credit_granted_by_bridge": False,
+        }
+    return {
+        "status": "REPORT_AVAILABLE_NATIVE_DUAL_READBACK_PASS",
+        "report_bytes": report_bytes,
+        "native_write_result": result,
+        "native_write_state": "DUAL_READBACK_PASS",
+        "platform_delivery_verified": False,
+        "natural_credit_granted_by_bridge": False,
+    }
