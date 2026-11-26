@@ -182,6 +182,7 @@ def get_json(url,path,attempt_limit=2):
             if not isinstance(p,dict):raise InputError('JSON_OBJECT_REQUIRED')
             path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
             return p,{'url':url,'path':str(path.name),'sha256':sha(body),'bytes':len(body),'retrieved_at':stamp(),
+                      'http_status':info['http_status'],
                       'attempts':n+1,'errors':errors,'diagnostics':diagnostics,'status':'FETCHED'}
         except urllib.error.HTTPError as e:
             response=e;info.update(http_status=e.code,category='HTTP_ERROR',error_type=type(e).__name__)
